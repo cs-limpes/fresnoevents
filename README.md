@@ -14,3 +14,16 @@ Start with:
 - `docs/development-phases.md`
 
 Application development should not begin until the documentation review described in Phase 0 is complete.
+
+## Local Phase 1 setup
+
+1. Copy `.dev.vars.example` to `.dev.vars`.
+2. Set `GOOGLE_CALENDAR_ID` and `GOOGLE_CALENDAR_API_KEY` in `.dev.vars`.
+3. Keep `.dev.vars` local. It is intentionally ignored by git.
+
+Useful commands:
+
+- `npm run test`
+- `npm run typecheck`
+- `npm run build`
+- `npm run dev`
