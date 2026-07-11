@@ -41,34 +41,124 @@ Establish shared product, architecture, data, design, and workflow guidance befo
 - Codex provides a documentation-only assessment
 - no application code is created
 
-## Phase 1: Static visual prototype
+## Phase 1: Functional data foundation
 
 ### Goal
 
-Create a responsive, attractive static prototype using fixture data so the structure and visual direction can be reviewed before live integrations.
+Create a minimal one-project application that proves Fresno Events can read the approved Google Calendar, normalize real event data, and render a plain usable public event list before visual polish is finalized.
+
+This is a function-first walking skeleton. The purpose is to expose recurring events, all-day events, multi-day events, source descriptions, metadata, missing fields, and Flyer2Calendar quirks early so the design can respond to real data rather than fictional fixtures.
 
 ### Authorized
 
 - Vite and React scaffold
 - TypeScript
 - basic repository scripts
-- header
-- introductory copy
-- navigation presentation
-- responsive event cards using fixture data
-- category artwork or category-art placeholders
-- Today, This Weekend, and Upcoming visual sections
-- footer
-- provisional design tokens
-- realistic but fictional fixture events
+- Cloudflare Workers with Static Assets local foundation
+- Wrangler configuration required for local development
+- Worker entry point
+- static asset serving through the local Worker runtime
+- environment example file with variable names only
+- approved server-side Google Calendar access method
+- Google Calendar Events list integration
+- explicit `timeMin` and `timeMax`
+- `singleEvents=true` and `orderBy=startTime`
+- pagination through `nextPageToken`
+- bounded event-range validation
+- normalized `/api/events` or equivalent event-data route
+- normalized public event TypeScript types
+- metadata parser
+- validation and fallback rules
+- description separation
+- safe excerpt generation
+- minimal sanitization or reduction of any rendered upstream description
+- recurring-event expansion and stable occurrence identifiers
+- handling for all-day, multi-day, modified, tentative, and canceled events
+- Today, This Weekend, and Upcoming date-range calculations
+- minimal reader-facing list using real approved calendar data
+- loading, empty, and error states
+- unit tests for parser, normalization, timezone behavior, and date ranges
+- integration tests with mocked Google Calendar responses
 - basic static accessibility
 - build configuration required to run locally
 
 ### Not authorized
 
-- Google Calendar API
-- Cloudflare Worker API
-- Cloudflare deployment
+- final visual design
+- final logo
+- final palette
+- category-specific artwork
+- polished card design beyond what is needed for readability
+- FullCalendar
+- public functional filtering beyond date range
+- keyword search
+- event detail routing
+- newsletter integration
+- event submission form
+- analytics
+- authentication
+- database
+- sponsorship system
+- payments
+- organizer accounts
+- real event scraping
+- production deployment
+- custom domain configuration
+
+### Completion means
+
+- the application runs locally
+- the application runs through the local Cloudflare Worker runtime
+- production build succeeds
+- secrets are not committed
+- credentials and calendar identifiers are not exposed in client code
+- live events load from the approved calendar through the server only
+- pagination works
+- recurring instances are expanded without duplicate rendering
+- stable occurrence identifiers exist for recurring instances
+- canceled events are excluded from normal display unless intentionally handled
+- all-day events display on correct local dates
+- multi-day events are represented clearly enough for the next visual phase
+- Today, This Weekend, and Upcoming ranges are calculated in `America/Los_Angeles`
+- Upcoming means the remainder of the current month, unless fewer than 7 days remain, then the next 7 days
+- upstream descriptions are not injected directly into React
+- metadata is not exposed in public descriptions
+- API errors return controlled JSON
+- loading, empty, and error states are visible in the plain UI
+- event range is bounded
+- no future-phase dependencies have been installed
+- Codex reports files changed and tests performed
+- Codex stops
+
+## Phase 2: Reader-facing visual foundation
+
+### Goal
+
+Turn the real normalized event feed into a responsive, readable, visually coherent event-discovery experience.
+
+Visual decisions should be informed by the data behavior proven in Phase 1.
+
+### Authorized
+
+- header
+- temporary `Fresno Events` bold-serif wordmark
+- introductory copy
+- navigation placement, with nonfunctional controls concealed from users until implemented
+- responsive event cards using real normalized event data
+- default shared category artwork or category-art placeholders
+- Today, This Weekend, and Upcoming visual sections
+- footer
+- provisional design tokens
+- starting palette with Elden Ring `#F28705` as the primary/accent color
+- maintainable design structure so colors, wordmark/logo treatment, graphics, and category artwork are easy to change
+- basic static accessibility
+
+### Not authorized
+
+- major changes to the Phase 1 event API unless required to fix discovered data bugs
+- final brand identity
+- final logo
+- final category artwork system
 - FullCalendar
 - live search
 - functional filtering
@@ -87,139 +177,22 @@ Create a responsive, attractive static prototype using fixture data so the struc
 ### Completion means
 
 - the page runs locally
+- the page uses real normalized event data from the Phase 1 API
 - production build succeeds
 - layout works at 320px, 375px, 768px, 1024px, and 1440px
 - no horizontal page scroll occurs at 320px
-- fixture events render consistently
+- event cards render consistently
 - long titles do not break the layout
 - missing-image events look intentional
+- all-day and multi-day events are understandable in cards
+- recurring instances do not appear duplicated
 - keyboard focus is visible
+- nonfunctional controls are concealed from users until implemented
 - no future-phase dependencies have been installed
-- no mocked control implies working functionality without clear prototype treatment
 - Codex reports files changed and tests performed
 - Codex stops
 
-## Phase 2: Cloudflare application foundation
-
-### Goal
-
-Prepare the approved static prototype for one-project Cloudflare Workers with Static Assets deployment without connecting live event data.
-
-### Authorized
-
-- Wrangler configuration
-- Worker entry point
-- static asset serving
-- local Cloudflare development command
-- environment example file
-- preview deployment configuration
-- health endpoint
-- documentation for local and preview environments
-
-### Not authorized
-
-- Google Calendar API
-- real event API
-- production deployment unless separately approved
-- custom domain
-- FullCalendar
-- live filters
-- event routes
-- database
-- analytics
-
-### Completion means
-
-- application runs through the Cloudflare local runtime
-- static assets render correctly
-- health endpoint returns documented JSON
-- secrets are not committed
-- preview deployment is possible
-- existing Phase 1 visuals remain intact
-- Codex stops
-
-## Phase 3: Event normalization and metadata parser
-
-### Goal
-
-Implement and test normalization using local Google-like fixtures before contacting Google Calendar.
-
-### Authorized
-
-- normalized event TypeScript types
-- metadata parser
-- validation and fallback rules
-- description separation
-- safe excerpt generation
-- date normalization helpers
-- recurring-event fixture representation
-- unit tests
-- fixture API route if needed for testing
-
-### Not authorized
-
-- real Google credentials
-- live calendar calls
-- production event API
-- FullCalendar
-- functional public filters
-- event detail routes
-- database
-
-### Completion means
-
-- parser tests cover valid and invalid metadata
-- all-day and timed events normalize correctly
-- unknown categories fall back safely
-- missing data does not crash the system
-- metadata is not exposed in public description
-- timezone-sensitive tests exist
-- Codex stops
-
-## Phase 4: Live Google Calendar integration
-
-### Goal
-
-Read a dedicated publishable Google Calendar through the Worker and return normalized public events.
-
-### Authorized
-
-- Google Calendar Events list integration
-- server-side credentials or approved public access method
-- pagination
-- expanded recurring events
-- bounded date-range validation
-- normalized `/api/events`
-- cache behavior
-- upstream error handling
-- integration tests with mocked upstream responses
-- documentation for secrets and calendar configuration
-
-### Not authorized
-
-- public functional filtering beyond date range
-- event detail routes
-- FullCalendar
-- submissions
-- newsletter
-- analytics
-- database
-- monetization
-
-### Completion means
-
-- live events load from the approved calendar
-- no credentials appear in client code
-- pagination works
-- recurring instances are not duplicated
-- canceled events are excluded
-- all-day events display on correct dates
-- API errors return JSON
-- cache behavior is documented
-- event range is bounded
-- Codex stops
-
-## Phase 5: Public browsing and filters
+## Phase 3: Public browsing and filters
 
 ### Goal
 
@@ -229,7 +202,7 @@ Turn the live event feed into a useful discovery experience.
 
 - Today view
 - This Weekend view
-- Next 7 Days view
+- Upcoming view
 - keyword search
 - category filters
 - city filters
@@ -262,7 +235,7 @@ Turn the live event feed into a useful discovery experience.
 - no-result states distinguish filters from lack of events
 - Codex stops
 
-## Phase 6: Event detail pages and sharing
+## Phase 4: Event detail pages and sharing
 
 ### Goal
 
@@ -301,7 +274,7 @@ Create indexable, shareable event detail experiences.
 - expired events have intentional behavior
 - Codex stops
 
-## Phase 7: Full calendar view
+## Phase 5: Full calendar view
 
 ### Goal
 
@@ -334,7 +307,7 @@ Add a traditional calendar option without making it the only discovery experienc
 - no duplicate events appear
 - Codex stops
 
-## Phase 8: Editorial enhancements
+## Phase 6: Editorial enhancements
 
 ### Goal
 
@@ -353,7 +326,7 @@ Possible authorized items, only when individually approved:
 
 Each item requires its own scoped task and acceptance criteria.
 
-## Phase 9: Event submissions
+## Phase 7: Event submissions
 
 ### Goal
 
@@ -373,7 +346,7 @@ This phase requires a new architecture decision regarding storage and moderation
 
 No submission should publish automatically in the initial implementation.
 
-## Phase 10: Monetization
+## Phase 8: Monetization
 
 ### Goal
 

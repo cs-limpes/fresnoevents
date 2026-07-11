@@ -6,7 +6,9 @@ This document defines the normalized public event model and the proposed structu
 
 The goal is to separate upstream Google Calendar quirks from the public UI.
 
-This model is architectural context until the live-data phase explicitly authorizes implementation.
+This model is implementation guidance for the functional data foundation phase once that phase is explicitly authorized.
+
+The project should prove the model against real approved Google Calendar data early. Test fixtures remain useful for edge cases, but public UI work should not depend on fictional events unless a task explicitly authorizes that fallback.
 
 ## 2. Normalized event type
 
@@ -108,6 +110,8 @@ A stable derived ID may combine:
 - original occurrence start
 
 Do not derive the public identifier from title alone.
+
+Recurring-event instance identity is required for the first live-data implementation. It should not be deferred until later visual or calendar-grid work.
 
 ## 4. Categories
 
@@ -356,9 +360,9 @@ The stable identifier remains authoritative.
 
 Changing a title should not make the event unreachable.
 
-## 16. Fixture requirements
+## 16. Test fixture requirements
 
-Fixture data should include:
+Test fixtures should include Google-like source records and normalized public records for:
 
 - timed event
 - all-day event
@@ -377,4 +381,4 @@ Fixture data should include:
 - online event
 - featured event
 
-Static Phase 1 fixtures should not pretend to be live data.
+Fixtures are for automated tests, parser development, and rare offline debugging. Public reader-facing views should use real approved calendar data once the functional data foundation phase is authorized.

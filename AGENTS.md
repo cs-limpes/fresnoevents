@@ -88,7 +88,7 @@ The canonical display timezone is `America/Los_Angeles`.
 
 Do not use the runtime machine timezone as a product default.
 
-All date-range logic, including Today, This Weekend, Next 7 Days, all-day events, and recurring events, must be tested against the canonical timezone.
+All date-range logic, including Today, This Weekend, Upcoming, all-day events, and recurring events, must be tested against the canonical timezone.
 
 ## Source-of-truth rules
 

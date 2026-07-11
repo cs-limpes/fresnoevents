@@ -15,7 +15,25 @@ The planned production architecture is a single TypeScript application using:
 
 The architecture should remain simple enough for one developer to understand and maintain.
 
-## 2. Why a single Cloudflare project
+## 2. Implementation sequencing
+
+The current roadmap is function-first.
+
+The first implementation phase should prove a thin vertical slice using real approved Google Calendar data before finalizing the visual design. This reduces rework by letting recurring events, all-day events, multi-day events, source descriptions, metadata, missing fields, and Flyer2Calendar quirks shape the user interface early.
+
+The first live-data implementation should still remain narrow:
+
+- one public event list
+- bounded date ranges
+- normalized server-owned event data
+- plain, usable rendering
+- clear loading, empty, and error states
+- no production deployment unless separately authorized
+- no search, filters, event detail routes, FullCalendar, submissions, analytics, database, or monetization
+
+Visual polish should build on the real normalized data model rather than on fictional fixtures.
+
+## 3. Why a single Cloudflare project
 
 Use one Cloudflare Worker project that serves both:
 
@@ -34,7 +52,7 @@ Benefits:
 
 Do not split the front end and API into separate Cloudflare projects unless a demonstrated requirement justifies it.
 
-## 3. Proposed repository shape
+## 4. Proposed repository shape
 
 The exact scaffold is authorized only in the appropriate phase.
 
@@ -67,7 +85,7 @@ The exact scaffold is authorized only in the appropriate phase.
 
 Do not create all directories preemptively. Create only what the current phase needs.
 
-## 4. Runtime boundaries
+## 5. Runtime boundaries
 
 ### Browser responsibilities
 
@@ -91,7 +109,7 @@ The browser must not:
 
 ### Worker responsibilities
 
-The Worker will eventually:
+The Worker owns live event-data responsibilities when a phase authorizes Google Calendar integration. Depending on the authorized phase, it will:
 
 - validate API request parameters
 - fetch Google Calendar events
@@ -100,12 +118,12 @@ The Worker will eventually:
 - normalize upstream data
 - parse structured metadata
 - sanitize or reduce public descriptions
-- cache responses
+- cache responses when cache behavior is authorized
 - return a stable public event schema
 - provide controlled error responses
 - keep credentials server-side
 
-## 5. Google Calendar integration
+## 6. Google Calendar integration
 
 Use the Google Calendar Events list endpoint.
 
@@ -120,7 +138,7 @@ Important expected request behavior:
 - exclusion or appropriate handling of canceled events
 - support for all-day events whose start and end use date-only values
 
-Calendar access strategy must be reviewed before implementation.
+Calendar access strategy must be approved before implementation.
 
 Preferred initial approach:
 
@@ -129,7 +147,7 @@ Preferred initial approach:
 - Calendar ID stored as configuration or secret as appropriate
 - no personal calendar credentials in browser code
 
-## 6. Public API shape
+## 7. Public API shape
 
 Proposed route:
 
@@ -164,7 +182,7 @@ Proposed response:
 
 The exact event shape is defined in `event-data-model.md`.
 
-## 7. Caching
+## 8. Caching
 
 The event API should eventually use Cloudflare caching.
 
@@ -185,7 +203,7 @@ Initial proposed policy:
 
 Do not implement a cron refresh, KV, D1, Durable Objects, or queues unless a later requirement demonstrates the need.
 
-## 8. Timezone handling
+## 9. Timezone handling
 
 Canonical timezone:
 
@@ -205,11 +223,13 @@ Rules:
 
 Do not rely on `new Date()` plus local machine assumptions for business logic.
 
-Use a timezone-capable standard or library only when the relevant phase requires date logic. Avoid adding one during a static prototype phase.
+Use a timezone-capable standard or library only when the relevant phase requires date logic. Because the roadmap now starts with real event data, timezone-capable handling is appropriate in the functional data foundation phase if built-in APIs are not sufficient.
 
-## 9. Recurring events
+## 10. Recurring events
 
-When live data is implemented:
+Recurring-event support is required for the first live-data implementation, not deferred polish.
+
+When live calendar data is fetched:
 
 - retrieve expanded instances
 - retain a stable instance identifier
@@ -225,11 +245,11 @@ Tests should include:
 - canceled occurrence
 - recurrence crossing daylight saving time
 
-## 10. Description handling
+## 11. Description handling
 
 Google Calendar descriptions may contain plain text, HTML, links, and structured metadata.
 
-The server should eventually:
+The server should:
 
 1. separate the structured metadata block
 2. parse and validate known fields
@@ -240,7 +260,7 @@ The server should eventually:
 
 Never inject upstream description HTML directly into React.
 
-## 11. Security
+## 12. Security
 
 Requirements:
 
@@ -256,7 +276,7 @@ Requirements:
 - do not log secrets or full sensitive responses
 - rate-limit only if actual abuse warrants it
 
-## 12. Error behavior
+## 13. Error behavior
 
 The API should return JSON errors.
 
@@ -281,7 +301,7 @@ The UI should distinguish:
 - invalid request
 - offline or network failure
 
-## 13. Front-end state
+## 14. Front-end state
 
 When functional filtering is authorized:
 
@@ -293,7 +313,7 @@ When functional filtering is authorized:
 
 Do not introduce a global state library unless built-in React state and URL state become insufficient.
 
-## 14. Routing
+## 15. Routing
 
 Routing is deferred until its phase.
 
@@ -311,11 +331,11 @@ Likely eventual routes:
 /submit
 ```
 
-Do not implement routes during Phase 1 unless explicitly authorized.
+Do not implement event detail routes during the functional data foundation phase unless explicitly authorized.
 
 When event detail routing is implemented, identifiers must remain stable even if titles change.
 
-## 15. FullCalendar
+## 16. FullCalendar
 
 FullCalendar is planned for a later full-calendar view.
 
@@ -325,24 +345,32 @@ Use it for calendar mechanics, not as the default design system.
 
 Do not install it before the phase that authorizes the real calendar view.
 
-## 16. Testing strategy
+## 17. Testing strategy
 
-### Static prototype phase
+### Functional data foundation phase
 
+- local app and Worker start successfully
 - build succeeds
-- lint succeeds if linting exists
-- component smoke tests only if test tooling is explicitly included
-- visual checks at defined widths
-- no future integrations
-
-### Data integration phase
-
+- no secrets appear in client code or committed files
+- approved calendar access works through the server only
+- Google Calendar pagination is handled
 - metadata parser unit tests
 - date normalization tests
 - timezone tests
 - recurring-event fixture tests
 - API response tests
 - upstream error tests
+- all-day, multi-day, canceled, modified, and recurring instances are covered
+- unsafe upstream descriptions are not injected directly into React
+
+### Reader-facing visual foundation phase
+
+- build succeeds
+- lint succeeds if linting exists
+- visual checks at defined widths
+- no future integrations beyond the already-approved event API
+- long titles, missing images, all-day events, multi-day events, and recurring instances remain readable
+- nonfunctional controls are concealed from users until implemented
 
 ### Interactive browsing phase
 
@@ -360,7 +388,7 @@ Do not install it before the phase that authorizes the real calendar view.
 - structured-data validation
 - monitoring behavior
 
-## 17. Observability
+## 18. Observability
 
 Initial observability should remain lightweight.
 
@@ -372,7 +400,7 @@ Potential later tools:
 
 Do not add analytics or third-party monitoring until explicitly authorized and selected.
 
-## 18. Deployment environments
+## 19. Deployment environments
 
 Planned environments:
 
@@ -384,7 +412,7 @@ Environment-specific values should not be hard-coded.
 
 Production deployment and domain configuration require explicit authorization.
 
-## 19. Scalability
+## 20. Scalability
 
 The initial design should scale through:
 
@@ -399,7 +427,7 @@ Do not preemptively build distributed infrastructure for hypothetical scale.
 
 If traffic or editorial complexity later requires a database, search index, queue, or separate service, introduce it based on measured need.
 
-## 20. Architectural decision rule
+## 21. Architectural decision rule
 
 When choosing between two implementations, prefer the one that:
 

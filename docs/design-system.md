@@ -18,9 +18,16 @@ The design should balance energy, local personality, readability, and trust.
 
 The visual identity is not yet final.
 
-Phase 1 may establish provisional tokens and component structure, but final logo, palette, typography, illustration style, and brand voice require human approval.
+The functional data foundation phase should keep styling plain and usable. A later reader-facing visual foundation phase may establish provisional tokens and component structure, but final logo, palette, typography, illustration style, and brand voice require human approval.
 
 Codex must not treat provisional choices as permanent brand decisions.
+
+Current provisional direction:
+
+- use `Fresno Events` in a bold serif font as a temporary wordmark until a proper logo is designed
+- use the supplied palette as the starting palette, with Elden Ring `#F28705` as the initial primary/accent color
+- use one default category artwork system for all categories at first, designed to be replaced later
+- keep colors, wordmark/logo treatment, graphics, and category artwork centralized and easy to change
 
 ## 3. Core design principles
 
@@ -54,6 +61,10 @@ Original flyers may be visually inconsistent. Use them selectively.
 
 Contrast, focus, labels, reading order, and touch size are part of the design, not later polish.
 
+### Reader usability
+
+The interface should favor ease of use and understandability over decorative complexity. Users should be able to scan dates, times, locations, event type, and key caveats without learning the site first.
+
 ## 4. Page frame
 
 Proposed structural regions:
@@ -68,7 +79,7 @@ Proposed structural regions:
 - newsletter or promotional region
 - footer
 
-Phase 1 should implement only the regions authorized by `development-phases.md`.
+Each phase should implement only the page regions authorized by `development-phases.md`.
 
 ## 5. Header
 
@@ -82,7 +93,7 @@ The eventual header may include:
 - search access
 - mobile menu
 
-During static phases, nonfunctional navigation must be clearly presented as prototype behavior or remain absent.
+Before navigation is functional, nonfunctional navigation or controls should be concealed from users rather than presented as working UI.
 
 ## 6. Event card anatomy
 
@@ -136,6 +147,8 @@ Proposed motifs:
 
 Icons should be decorative only when the text label already communicates the category.
 
+Initial implementation may use one shared default artwork treatment for all categories. Category-specific artwork should wait until the visual system is ready for focused design work.
+
 ## 8. Event imagery rules
 
 Use original imagery when:
@@ -162,6 +175,8 @@ Do not use flyer text as the only accessible event information.
 
 Final fonts are undecided.
 
+The temporary wordmark should use a bold serif treatment for `Fresno Events`. It must be implemented as a replaceable design element, not as a final logo decision.
+
 Provisional requirements:
 
 - highly readable body face
@@ -185,6 +200,18 @@ Avoid excessive font families and weights.
 
 Final palette is undecided.
 
+Starting palette:
+
+```css
+--palette-milky-aquamarine: #037F8C;
+--palette-dead-sea: #79DCF2;
+--palette-midas-gold: #F2B705;
+--palette-elden-ring: #F28705;
+--palette-momo-peach: #F27979;
+```
+
+Use Elden Ring `#F28705` as the initial primary/accent color.
+
 Provisional palette must include semantic roles rather than arbitrary color names:
 
 ```css
@@ -205,6 +232,8 @@ Provisional palette must include semantic roles rather than arbitrary color name
 Category colors, if used, should be separate from semantic system colors.
 
 Every critical state must have a non-color indicator.
+
+Implementation should map palette values into semantic tokens. Component styles should reference semantic tokens wherever possible so future palette changes do not require broad component rewrites.
 
 ## 11. Spacing
 
@@ -265,7 +294,7 @@ Future filter UI should support:
 - visible result count when useful
 - URL persistence
 
-Do not implement functional filters during Phase 1.
+Do not implement functional filters before the phase that explicitly authorizes public filtering.
 
 ## 15. Search
 
@@ -334,13 +363,13 @@ Cards and controls must remain readable at 200% zoom.
 - contrast checked for text and controls
 - no hover-only information
 
-## 19. Prototype copy
+## 19. Public copy and sample content
 
-Phase 1 may use clearly labeled fixture copy.
+Reader-facing views should use real approved event data once live data integration is authorized.
 
 Avoid lorem ipsum.
 
-Use realistic Fresno-oriented examples without presenting them as real current events.
+If sample copy is ever used for documentation, tests, or offline development, it must be clearly labeled as sample content and must not be presented as real current events.
 
 ## 20. Design approval boundaries
 
@@ -348,7 +377,7 @@ Codex may:
 
 - implement documented provisional tokens
 - create reusable card and layout structure
-- build category-art placeholders
+- build shared default category-art placeholders
 - ensure responsive behavior
 
 Codex may not:

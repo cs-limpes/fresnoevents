@@ -15,6 +15,8 @@ The site should:
 - Support browsing by date, category, location, audience, and price.
 - Maintain a cohesive visual identity even when source flyers are inconsistent.
 - Make ongoing event publishing manageable through Google Calendar.
+- Prove real event-data behavior early so recurring events, all-day events, multi-day events, metadata, and source quirks inform the interface before visual polish is finalized.
+- Keep reader usability, ease of understanding, and data correctness ahead of decorative design.
 - Provide a foundation for future audience growth, sponsorships, newsletters, promoted events, and organizer submissions.
 - Remain inexpensive to operate during early growth.
 - Scale without requiring a full rewrite if traffic becomes substantial.
@@ -54,11 +56,11 @@ The site should work well for people who arrive with either a specific intent or
 
 Examples:
 
-- “What is happening tonight?”
-- “What can I do this weekend?”
-- “Are there any free family events?”
-- “Show me art events in Tower District.”
-- “What is happening over the next seven days?”
+- "What is happening tonight?"
+- "What can I do this weekend?"
+- "Are there any free family events?"
+- "Show me art events in Tower District."
+- "What is coming up soon?"
 
 ## 5. Product voice
 
@@ -103,7 +105,7 @@ The mature homepage should support:
 - prominent event search
 - Today
 - This Weekend
-- Next 7 Days
+- Upcoming
 - featured events
 - category browsing
 - upcoming event cards
@@ -133,9 +135,16 @@ Events beginning earlier but continuing into the weekend should be included when
 
 This definition may be revised later, but it must remain explicit and tested.
 
-### 8.3 Next 7 Days
+### 8.3 Upcoming
 
-A rolling seven-day window beginning at the current time, unless the final UI label or product decision explicitly changes it to seven calendar days.
+Default definition:
+
+- the remainder of the current calendar month, calculated in `America/Los_Angeles`
+- if the remainder of the month is less than 7 days, use the next 7 days instead
+
+The window should include events whose active time overlaps the range, including all-day, multi-day, and recurring instances.
+
+This definition may be revised later, but it must remain explicit and tested.
 
 ### 8.4 Full Calendar
 
@@ -260,7 +269,7 @@ Possible public values:
 - Registration required
 - Price unknown
 
-Do not treat “registration required” as equivalent to paid.
+Do not treat "registration required" as equivalent to paid.
 
 ## 14. Audience model
 
@@ -316,6 +325,8 @@ Initial source:
 Google Calendar remains the initial editorial management interface.
 
 The public website reads and normalizes calendar data. It does not expose private calendars or private event information.
+
+The initial implementation should use real data from the approved dedicated Google Calendar through server-side access, unless a later task explicitly authorizes static or fictional public fixtures. Data behavior should inform design decisions rather than being retrofitted after visual polish.
 
 Future workflow may include:
 
