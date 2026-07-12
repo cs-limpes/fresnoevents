@@ -33,7 +33,25 @@ source: https://example.com/event`,
     expect(event?.taxonomy.audience).toEqual(['21-plus'])
     expect(event?.taxonomy.priceType).toBe('paid')
     expect(event?.editorial.featured).toBe(true)
+    expect(event?.links.sourceUrl).toBe('https://example.com/event')
+    expect(event?.source.htmlLink).toBe('https://calendar.google.com/event?eid=abc123')
     expect(event?.multiDay).toBe(true)
+  })
+
+  it('does not expose the Google Calendar htmlLink as a public source link', () => {
+    const source: GoogleCalendarEvent = {
+      id: 'calendar-only-link',
+      summary: 'Calendar Link Only',
+      htmlLink: 'https://calendar.google.com/event?eid=calendar-only-link',
+      start: { dateTime: '2026-07-11T19:00:00-07:00' },
+      end: { dateTime: '2026-07-11T20:00:00-07:00' },
+      status: 'confirmed',
+    }
+
+    const event = normalizeGoogleEvent(source)
+
+    expect(event?.links.sourceUrl).toBeUndefined()
+    expect(event?.source.htmlLink).toBe('https://calendar.google.com/event?eid=calendar-only-link')
   })
 
   it('marks multi-day all-day events using exclusive end dates', () => {

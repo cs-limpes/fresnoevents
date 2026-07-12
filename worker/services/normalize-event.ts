@@ -64,7 +64,7 @@ export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent |
     organizer: buildOrganizer(metadata.fields),
     media: buildMedia(metadata.fields),
     links: {
-      sourceUrl: safeHttpsUrl(metadata.fields.source) ?? safeHttpsUrl(source.htmlLink),
+      sourceUrl: safeHttpsUrl(metadata.fields.source),
       registrationUrl: safeHttpsUrl(metadata.fields.registration),
       websiteUrl: safeHttpsUrl(metadata.fields.website),
     },
