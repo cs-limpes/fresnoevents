@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import listPlugin from '@fullcalendar/list'
-import type { EventContentArg, EventMountArg } from '@fullcalendar/core'
+import type { EventClickArg, EventContentArg, EventMountArg } from '@fullcalendar/core'
 import { AGENDA_TIMEZONE } from '../lib/agenda-sections'
 import { toFullCalendarEvents } from '../lib/calendar-events'
 import { getEventDetailPath } from '../lib/event-detail'
@@ -41,8 +41,9 @@ export function EventCalendarView({ events, currentSearch }: { events: PublicEve
             list: 'List',
           }}
           events={calendarEvents}
+          eventClick={openCalendarEvent}
           eventContent={(arg) => <CalendarEventContent arg={arg} />}
-          eventDidMount={setCalendarEventTitle}
+          eventDidMount={prepareCalendarEvent}
           dayMaxEventRows={3}
           displayEventEnd
           height="auto"
@@ -75,10 +76,33 @@ function CalendarEventContent({ arg }: { arg: EventContentArg }) {
   )
 }
 
-function setCalendarEventTitle({ event, el }: EventMountArg): void {
+function openCalendarEvent(arg: EventClickArg): void {
+  if (!arg.event.url) {
+    return
+  }
+
+  arg.jsEvent.preventDefault()
+  window.location.href = arg.event.url
+}
+
+function prepareCalendarEvent({ event, el }: EventMountArg): void {
   const publicEvent = event.extendedProps.publicEvent as PublicEvent | undefined
 
   if (publicEvent) {
     el.setAttribute('title', publicEvent.title)
+  }
+
+  if (event.url && !(el instanceof HTMLAnchorElement)) {
+    el.setAttribute('role', 'link')
+    el.setAttribute('tabindex', '0')
+    el.classList.add('calendar-event-clickable')
+    el.addEventListener('keydown', (keyboardEvent) => {
+      if (keyboardEvent.key !== 'Enter' && keyboardEvent.key !== ' ') {
+        return
+      }
+
+      keyboardEvent.preventDefault()
+      window.location.href = event.url
+    })
   }
 }

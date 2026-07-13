@@ -444,6 +444,10 @@ h1 {
   border: 0;
 }
 
+.calendar-surface .fc .calendar-event-clickable {
+  cursor: pointer;
+}
+
 .calendar-surface .fc .fc-daygrid-event {
   align-items: stretch;
   margin-top: var(--space-1);

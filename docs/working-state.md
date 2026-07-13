@@ -46,6 +46,7 @@ Last updated: 2026-07-13
   - list view
   - date navigation
   - event links to detail pages
+  - keyboard-navigable event interactions in both month and list views
   - selected filter support
   - no duplicate events by normalized event ID
 - Agenda view uses the documented Today, This Weekend, and Upcoming windows.
