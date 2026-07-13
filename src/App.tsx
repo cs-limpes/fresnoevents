@@ -2,6 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DateTime } from 'luxon'
 import type { AgendaSection } from './lib/agenda-sections'
 import {
+  buildGoogleCalendarUrl,
+  buildIcsDataUrl,
+  buildMapUrl,
+  buildStructuredEventData,
+  findEventByDetailPath,
+  formatEventLocation,
+  getEventCanonicalUrl,
+  getEventDetailPath,
+  getEventSummary,
+  slugifyTitle,
+} from './lib/event-detail'
+import {
   buildFilterOptions,
   DATE_VIEW_OPTIONS,
   DEFAULT_FILTERS,
@@ -25,8 +37,17 @@ type LoadState =
   | { status: 'empty'; data: EventsResponse }
   | { status: 'error'; message: string }
 
+type AppRoute = { kind: 'browse'; pathname: string } | { kind: 'event-detail'; pathname: string }
+
 export function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const route = useAppRoute()
+  const detailEvent =
+    state.status === 'loaded' && route.kind === 'event-detail'
+      ? findEventByDetailPath(state.data.events, route.pathname)
+      : undefined
+
+  usePageMetadata(route, detailEvent)
 
   useEffect(() => {
     let cancelled = false
@@ -53,11 +74,17 @@ export function App() {
     <main className="app-shell">
       <header className="site-header">
         <div className="masthead">
-          <p className="wordmark">Fresno Events</p>
+          <a className="wordmark" href="/">
+            Fresno Events
+          </a>
           <p className="eyebrow">Today, This Weekend, and Upcoming</p>
         </div>
-        <h1>Find what is happening around Fresno.</h1>
-        <p className="intro">A live local agenda for Fresno, Clovis, and nearby Central Valley communities.</p>
+        <h1>{detailEvent ? detailEvent.title : 'Find what is happening around Fresno.'}</h1>
+        <p className="intro">
+          {detailEvent
+            ? formatEventDateTime(detailEvent)
+            : 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'}
+        </p>
       </header>
 
       {state.status === 'loading' && <StatusMessage title="Loading events" body="Checking the calendar now." />}
@@ -73,12 +100,184 @@ export function App() {
         />
       )}
 
-      {state.status === 'loaded' && <AgendaSections data={state.data} />}
+      {state.status === 'loaded' &&
+        (route.kind === 'event-detail' ? (
+          <EventDetailPage data={state.data} pathname={route.pathname} />
+        ) : (
+          <AgendaSections data={state.data} />
+        ))}
 
       <footer className="site-footer">
         <p>Fresno Events is in early development. Event facts come from the approved editorial calendar.</p>
       </footer>
     </main>
+  )
+}
+
+function EventDetailPage({ data, pathname }: { data: EventsResponse; pathname: string }) {
+  const event = findEventByDetailPath(data.events, pathname)
+
+  if (!event) {
+    return <EventNotFound />
+  }
+
+  return <EventDetail event={event} />
+}
+
+function EventDetail({ event }: { event: PublicEvent }) {
+  const [shareStatus, setShareStatus] = useState('')
+  const eventUrl = getEventCanonicalUrl(event, window.location.origin)
+  const mapUrl = buildMapUrl(event)
+  const eventLinks = getEventLinks(event)
+  const calendarUrl = buildGoogleCalendarUrl(event, eventUrl)
+  const icsUrl = buildIcsDataUrl(event, eventUrl)
+  const location = formatEventLocation(event)
+  const structuredData = buildStructuredEventData(event, eventUrl)
+
+  async function copyEventLink() {
+    if (!navigator.clipboard?.writeText) {
+      setShareStatus('Copy the page URL from the address bar.')
+      return
+    }
+
+    await navigator.clipboard.writeText(eventUrl)
+    setShareStatus('Link copied.')
+  }
+
+  async function shareEvent() {
+    const share = (navigator as Navigator & { share?: (data: ShareData) => Promise<void> }).share
+
+    if (!share) {
+      await copyEventLink()
+      return
+    }
+
+    await share({
+      title: event.title,
+      text: getEventSummary(event),
+      url: eventUrl,
+    })
+    setShareStatus('Share sheet opened.')
+  }
+
+  return (
+    <article className="event-detail" aria-labelledby="event-detail-heading">
+      <script type="application/ld+json">{JSON.stringify(structuredData)}</script>
+
+      <a className="back-link" href={`/${window.location.search}`}>
+        Back to events
+      </a>
+
+      <div className="event-detail-hero">
+        <div className="event-visual event-detail-visual" aria-hidden="true">
+          <span>{getDateBadge(event).month}</span>
+          <strong>{getDateBadge(event).day}</strong>
+        </div>
+        <div>
+          <div className="event-meta">
+            <span>{formatCategory(event.taxonomy.primaryCategory)}</span>
+            <span>{formatPrice(event.taxonomy.priceType)}</span>
+            {event.taxonomy.audience.map((audience) => (
+              <span key={audience}>{formatFilterLabel(audience)}</span>
+            ))}
+            {event.allDay && <span>All day</span>}
+            {event.multiDay && <span>Multi-day</span>}
+          </div>
+          <h2 id="event-detail-heading">{event.title}</h2>
+          <p className="event-time">{formatEventDateTime(event)}</p>
+          {location && <p className="event-location">{location}</p>}
+        </div>
+      </div>
+
+      <div className="event-detail-grid">
+        <section className="event-detail-section" aria-labelledby="event-about-heading">
+          <h3 id="event-about-heading">About</h3>
+          {event.description ? (
+            <p className="event-detail-description">{event.description}</p>
+          ) : event.excerpt ? (
+            <p className="event-detail-description">{event.excerpt}</p>
+          ) : (
+            <p className="event-detail-muted">No public description is listed yet.</p>
+          )}
+        </section>
+
+        <aside className="event-detail-actions" aria-label="Event actions">
+          <a className="primary-action" href={calendarUrl} target="_blank" rel="noreferrer">
+            Add to Google Calendar
+          </a>
+          <a className="secondary-button detail-action-link" href={icsUrl} download={`${slugifyTitle(event.title)}.ics`}>
+            Download .ics
+          </a>
+          {mapUrl && (
+            <a className="secondary-button detail-action-link" href={mapUrl} target="_blank" rel="noreferrer">
+              Open map
+            </a>
+          )}
+          {eventLinks.map((link) => (
+            <a key={link.href} className="secondary-button detail-action-link" href={link.href} target="_blank" rel="noreferrer">
+              {link.label}
+            </a>
+          ))}
+          <button className="secondary-button" type="button" onClick={copyEventLink}>
+            Copy link
+          </button>
+          <button className="secondary-button" type="button" onClick={shareEvent}>
+            Share
+          </button>
+          {shareStatus && <p className="share-status" aria-live="polite">{shareStatus}</p>}
+        </aside>
+      </div>
+
+      {(event.organizer?.name || event.accessibility?.text || event.editorial.sponsored || event.editorial.promoted) && (
+        <section className="event-detail-section" aria-labelledby="event-notes-heading">
+          <h3 id="event-notes-heading">Details</h3>
+          <dl className="detail-list">
+            {event.organizer?.name && (
+              <>
+                <dt>Organizer</dt>
+                <dd>
+                  {event.organizer.url ? (
+                    <a href={event.organizer.url} target="_blank" rel="noreferrer">
+                      {event.organizer.name}
+                    </a>
+                  ) : (
+                    event.organizer.name
+                  )}
+                </dd>
+              </>
+            )}
+            {event.accessibility?.text && (
+              <>
+                <dt>Accessibility</dt>
+                <dd>{event.accessibility.text}</dd>
+              </>
+            )}
+            {(event.editorial.sponsored || event.editorial.promoted) && (
+              <>
+                <dt>Disclosure</dt>
+                <dd>
+                  {event.editorial.sponsored
+                    ? `Sponsored${event.editorial.sponsorName ? ` by ${event.editorial.sponsorName}` : ''}`
+                    : 'Promoted'}
+                </dd>
+              </>
+            )}
+          </dl>
+        </section>
+      )}
+    </article>
+  )
+}
+
+function EventNotFound() {
+  return (
+    <section className="filter-empty-state" aria-labelledby="event-not-found-heading">
+      <h2 id="event-not-found-heading">Event not found</h2>
+      <p>This event is not available in the current Fresno Events feed. It may have expired or been removed.</p>
+      <a className="secondary-button detail-action-link" href="/">
+        Browse current events
+      </a>
+    </section>
   )
 }
 
@@ -369,6 +568,7 @@ function EventListItem({ event }: { event: PublicEvent }) {
   const dateTime = formatEventDateTime(event)
   const eventLinks = getEventLinks(event)
   const dateBadge = getDateBadge(event)
+  const detailPath = `${getEventDetailPath(event)}${window.location.search}`
 
   return (
     <li className="event-item">
@@ -385,12 +585,19 @@ function EventListItem({ event }: { event: PublicEvent }) {
               {event.allDay && <span>All day</span>}
               {event.multiDay && <span>Multi-day</span>}
             </div>
-            <h4>{event.title}</h4>
+            <h4>
+              <a className="event-title-link" href={detailPath}>
+                {event.title}
+              </a>
+            </h4>
             <p className="event-time">{dateTime}</p>
             {location && <p className="event-location">{location}</p>}
             {event.excerpt && <p className="event-description">{event.excerpt}</p>}
-            {eventLinks.length > 0 && (
+            {(eventLinks.length > 0 || detailPath) && (
               <div className="event-links" aria-label={`${event.title} links`}>
+                <a className="event-link" href={detailPath}>
+                  Details
+                </a>
                 {eventLinks.map((link) => (
                   <a key={link.href} className="event-link" href={link.href} target="_blank" rel="noreferrer">
                     {link.label}
@@ -485,14 +692,9 @@ function formatPrice(value: string): string {
 }
 
 function formatLocation(event: PublicEvent): string | undefined {
-  const parts = [
-    event.venue?.name,
-    event.venue?.neighborhood,
-    event.venue?.city,
-    event.venue?.online ? 'Online' : undefined,
-  ].filter(Boolean)
+  const parts = [event.venue?.name, event.venue?.neighborhood, event.venue?.city, event.venue?.online ? 'Online' : undefined].filter(Boolean)
 
-  return parts.length > 0 ? parts.join(' - ') : event.venue?.address
+  return parts.length > 0 ? parts.join(' - ') : undefined
 }
 
 function getEventLinks(event: PublicEvent): Array<{ label: string; href: string }> {
@@ -548,4 +750,71 @@ function getActiveFilterChips(filters: FilterState): Array<{ key: keyof FilterSt
     filters.audience ? { key: 'audience' as const, label: `Audience: ${formatFilterLabel(filters.audience)}` } : undefined,
     filters.price ? { key: 'price' as const, label: `Price: ${formatFilterLabel(filters.price)}` } : undefined,
   ].filter((chip): chip is { key: keyof FilterState; label: string } => Boolean(chip))
+}
+
+function useAppRoute(): AppRoute {
+  const [route, setRoute] = useState<AppRoute>(() => readAppRoute())
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(readAppRoute())
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  return route
+}
+
+function readAppRoute(): AppRoute {
+  const pathname = window.location.pathname
+  return pathname.startsWith('/events/') ? { kind: 'event-detail', pathname } : { kind: 'browse', pathname }
+}
+
+function usePageMetadata(route: AppRoute, event?: PublicEvent): void {
+  useEffect(() => {
+    const title = event
+      ? `${event.title} | Fresno Events`
+      : route.kind === 'event-detail'
+        ? 'Event not found | Fresno Events'
+        : 'Fresno Events'
+    const description = event
+      ? getEventSummary(event)
+      : 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'
+    const url = event ? getEventCanonicalUrl(event, window.location.origin) : `${window.location.origin}${route.pathname}`
+
+    document.title = title
+    upsertMeta('name', 'description', description)
+    upsertMeta('property', 'og:title', title)
+    upsertMeta('property', 'og:description', description)
+    upsertMeta('property', 'og:type', event ? 'article' : 'website')
+    upsertMeta('property', 'og:url', url)
+    upsertMeta('name', 'twitter:card', 'summary')
+    upsertCanonical(url)
+  }, [event, route.kind, route.pathname])
+}
+
+function upsertMeta(attribute: 'name' | 'property', key: string, content: string): void {
+  let element = document.head.querySelector<HTMLMetaElement>(`meta[${attribute}="${key}"]`)
+
+  if (!element) {
+    element = document.createElement('meta')
+    element.setAttribute(attribute, key)
+    document.head.appendChild(element)
+  }
+
+  element.content = content
+}
+
+function upsertCanonical(href: string): void {
+  let element = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]')
+
+  if (!element) {
+    element = document.createElement('link')
+    element.rel = 'canonical'
+    document.head.appendChild(element)
+  }
+
+  element.href = href
 }

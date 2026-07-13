@@ -15,19 +15,38 @@ export async function handleEventsRequest(request: Request, env: Env): Promise<R
     return jsonError('METHOD_NOT_ALLOWED', 'This endpoint only supports GET requests.', 405)
   }
 
+  const url = new URL(request.url)
+  const result = await loadEventsResponse(url.searchParams, env)
+
+  if (!result.ok) {
+    return jsonError(result.code, result.message, result.status)
+  }
+
+  return json(result.response)
+}
+
+export type EventsLoadResult =
+  | { ok: true; response: EventsResponse }
+  | { ok: false; code: string; message: string; status: number }
+
+export async function loadEventsResponse(searchParams: URLSearchParams, env: Env): Promise<EventsLoadResult> {
   const calendarId = env.GOOGLE_CALENDAR_ID
   const apiKey = env.GOOGLE_CALENDAR_API_KEY
   const timezone = env.GOOGLE_CALENDAR_TIMEZONE || 'America/Los_Angeles'
 
   if (!calendarId || !apiKey) {
-    return jsonError('EVENT_SOURCE_NOT_CONFIGURED', 'Events are not configured for this environment.', 500)
+    return {
+      ok: false,
+      code: 'EVENT_SOURCE_NOT_CONFIGURED',
+      message: 'Events are not configured for this environment.',
+      status: 500,
+    }
   }
 
-  const url = new URL(request.url)
-  const rangeResult = validateRequestedRange(url.searchParams)
+  const rangeResult = validateRequestedRange(searchParams)
 
   if (!rangeResult.ok) {
-    return jsonError(rangeResult.code, rangeResult.message, rangeResult.status)
+    return rangeResult
   }
 
   try {
@@ -43,11 +62,16 @@ export async function handleEventsRequest(request: Request, env: Env): Promise<R
       generatedAt: new Date().toISOString(),
     }
 
-    return json(response)
+    return { ok: true, response }
   } catch (error) {
     const status = error instanceof GoogleCalendarError && error.status >= 400 && error.status < 500 ? 502 : 503
 
-    return jsonError('EVENT_SOURCE_UNAVAILABLE', 'Events are temporarily unavailable.', status)
+    return {
+      ok: false,
+      code: 'EVENT_SOURCE_UNAVAILABLE',
+      message: 'Events are temporarily unavailable.',
+      status,
+    }
   }
 }
 
