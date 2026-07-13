@@ -1,7 +1,8 @@
 import { DateTime } from 'luxon'
 
 export const CANONICAL_TIMEZONE = 'America/Los_Angeles' as const
-const MAX_RANGE_DAYS = 93
+const DEFAULT_LOOKAHEAD_DAYS = 370
+const MAX_RANGE_DAYS = 370
 type AnyDateTime = DateTime<boolean>
 
 export type EventRange = {
@@ -64,11 +65,10 @@ export function getUpcomingRange(now: AnyDateTime = DateTime.now()): EventRange 
 
 export function getDefaultEventRange(now: AnyDateTime = DateTime.now()): SerializedEventRange {
   const today = getTodayRange(now)
-  const upcoming = getUpcomingRange(now)
 
   return serializeRange({
     start: today.start,
-    end: upcoming.end,
+    end: today.start.plus({ days: DEFAULT_LOOKAHEAD_DAYS }),
     timezone: CANONICAL_TIMEZONE,
   })
 }

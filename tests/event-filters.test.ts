@@ -4,8 +4,11 @@ import { AGENDA_TIMEZONE } from '../src/lib/agenda-sections'
 import {
   DEFAULT_FILTERS,
   buildFilterOptions,
+  filterCalendarEvents,
   filterEvents,
+  getActiveFilterCount,
   getFilteredAgendaSections,
+  hasActiveFilters,
   parseFilters,
   serializeFilters,
   type FilterState,
@@ -55,6 +58,7 @@ describe('event filters', () => {
   it('serializes and parses URL query state', () => {
     const filters: FilterState = {
       query: 'tower music',
+      display: 'calendar',
       view: 'this-weekend',
       category: 'music',
       city: 'Fresno',
@@ -65,6 +69,60 @@ describe('event filters', () => {
 
     expect(parseFilters(serializeFilters(filters))).toEqual(filters)
     expect(serializeFilters(DEFAULT_FILTERS).toString()).toBe('')
+    expect(parseFilters(new URLSearchParams('display=unknown'))).toEqual(DEFAULT_FILTERS)
+  })
+
+  it('does not count calendar display mode as an active filter', () => {
+    const filters: FilterState = { ...DEFAULT_FILTERS, display: 'calendar' }
+
+    expect(getActiveFilterCount(filters)).toBe(0)
+    expect(hasActiveFilters(filters)).toBe(false)
+    expect(serializeFilters(filters).toString()).toBe('display=calendar')
+  })
+
+  it('treats agenda search and date window as inactive in calendar display mode', () => {
+    const filters: FilterState = {
+      ...DEFAULT_FILTERS,
+      display: 'calendar',
+      query: 'tower music',
+      view: 'this-weekend',
+    }
+
+    expect(getActiveFilterCount(filters)).toBe(0)
+    expect(hasActiveFilters(filters)).toBe(false)
+  })
+
+  it('filters calendar events by facets but not agenda search or date window', () => {
+    const events = [
+      event({
+        id: 'match',
+        title: 'Outdoor Market',
+        start: '2026-09-01T12:00:00-07:00',
+        end: '2026-09-01T13:00:00-07:00',
+        venue: { city: 'Fresno', online: false },
+        taxonomy: { primaryCategory: 'markets', tags: [], audience: ['all-ages'], priceType: 'free' },
+      }),
+      event({
+        id: 'wrong-city',
+        title: 'Tower Music',
+        start: '2026-07-11T12:00:00-07:00',
+        end: '2026-07-11T13:00:00-07:00',
+        venue: { city: 'Clovis', online: false },
+        taxonomy: { primaryCategory: 'markets', tags: [], audience: ['all-ages'], priceType: 'free' },
+      }),
+    ]
+
+    const filters: FilterState = {
+      ...DEFAULT_FILTERS,
+      display: 'calendar',
+      query: 'tower music',
+      view: 'today',
+      category: 'markets',
+      city: 'Fresno',
+    }
+
+    expect(filterCalendarEvents(events, filters).map((item) => item.id)).toEqual(['match'])
+    expect(getActiveFilterCount(filters)).toBe(2)
   })
 
   it('builds filter options from available event data only', () => {
@@ -84,7 +142,7 @@ describe('event filters', () => {
     })
   })
 
-  it('returns a single selected date-window section without duplicate all-view behavior', () => {
+  it('returns only the selected date-window section when a date filter is active', () => {
     const now = DateTime.fromISO('2026-07-11T10:00:00', { zone: AGENDA_TIMEZONE })
     const sections = getFilteredAgendaSections(
       [

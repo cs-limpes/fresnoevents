@@ -4,7 +4,7 @@ import { AGENDA_TIMEZONE, getAgendaSections } from '../src/lib/agenda-sections'
 import type { PublicEvent } from '../src/types/events'
 
 describe('agenda sections', () => {
-  it('groups events into Today, This Weekend, and Upcoming without repeating cards', () => {
+  it('groups events into every section whose displayed range they overlap', () => {
     const now = DateTime.fromISO('2026-07-11T10:00:00', { zone: AGENDA_TIMEZONE })
     const sections = getAgendaSections(
       [
@@ -17,11 +17,11 @@ describe('agenda sections', () => {
 
     expect(sections.map((section) => section.title)).toEqual(['Today', 'This Weekend', 'Upcoming'])
     expect(sections[0].events.map((item) => item.id)).toEqual(['today'])
-    expect(sections[1].events.map((item) => item.id)).toEqual(['weekend'])
-    expect(sections[2].events.map((item) => item.id)).toEqual(['upcoming'])
+    expect(sections[1].events.map((item) => item.id)).toEqual(['today', 'weekend'])
+    expect(sections[2].events.map((item) => item.id)).toEqual(['today', 'weekend', 'upcoming'])
   })
 
-  it('puts an overlapping all-day multi-day event in the first matching section only', () => {
+  it('keeps an overlapping all-day multi-day event in each matching section', () => {
     const now = DateTime.fromISO('2026-07-11T10:00:00', { zone: AGENDA_TIMEZONE })
     const sections = getAgendaSections(
       [
@@ -37,8 +37,17 @@ describe('agenda sections', () => {
     )
 
     expect(sections[0].events.map((item) => item.id)).toEqual(['festival'])
-    expect(sections[1].events).toEqual([])
-    expect(sections[2].events).toEqual([])
+    expect(sections[1].events.map((item) => item.id)).toEqual(['festival'])
+    expect(sections[2].events.map((item) => item.id)).toEqual(['festival'])
+  })
+
+  it('does not duplicate the same event within a single section', () => {
+    const now = DateTime.fromISO('2026-07-11T10:00:00', { zone: AGENDA_TIMEZONE })
+    const duplicate = event({ id: 'today', start: '2026-07-11T12:00:00-07:00', end: '2026-07-11T13:00:00-07:00' })
+
+    const sections = getAgendaSections([duplicate, duplicate], now)
+
+    expect(sections[0].events.map((item) => item.id)).toEqual(['today'])
   })
 })
 

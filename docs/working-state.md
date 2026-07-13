@@ -6,16 +6,22 @@ Last updated: 2026-07-13
 
 - Google Calendar events are retrieved through the server-side Cloudflare Worker only.
 - The public app renders a real event-discovery agenda using normalized Google Calendar data.
+- The default event feed now imports a bounded long-range window of roughly one year so the primary calendar has the rest of the current Google Calendar feed available.
 - Agenda sections are:
   - Today
   - This Weekend
   - Upcoming
 - Upcoming means the remainder of the current month, unless fewer than seven days remain, then the next seven days.
 - Recurring event instances are expanded by the Google Calendar API using `singleEvents=true` and rendered as individual occurrences.
+- Explicit Flyer2Calendar-style weekly recurrence notes are also expanded when Google Calendar returns a long single event with:
+  - `Type: recurring_event`
+  - `Recurrence note: ... weekly, start-end time`
+- Expanded recurrence-note occurrences are clipped to the requested API range.
 - Canceled events are excluded from normal display.
 - All-day and multi-day events are represented in the normalized event model and displayed with explicit labels.
 - Event descriptions are reduced to safe plain text; upstream HTML is not injected into React.
 - Structured metadata blocks are parsed from Google Calendar descriptions and removed from public descriptions.
+- Delimiter-free calendar description metadata is parsed for the current feed format when it uses recognized key/value lines such as `Type`, `Category`, `Organizer`, `Cost/tickets`, `URL/contact`, and `Recurrence note`.
 - Public source links come only from explicit event metadata, not from the Google Calendar `htmlLink`.
 - The current visual foundation includes:
   - temporary bold-serif `Fresno Events` wordmark
@@ -34,6 +40,24 @@ Last updated: 2026-07-13
   - active filter chips
   - clear-all behavior
   - URL query state
+- A FullCalendar-powered Calendar browse view is implemented alongside Agenda view.
+- Calendar view includes:
+  - month view
+  - list view
+  - date navigation
+  - event links to detail pages
+  - selected filter support
+  - no duplicate events by normalized event ID
+- Agenda view uses the documented Today, This Weekend, and Upcoming windows.
+- Agenda sections are literal date windows. An event may appear in more than one agenda section when the displayed ranges overlap, such as an event that is both Today and This Weekend.
+- Calendar view time scope is controlled by the currently displayed FullCalendar month/list range, not by the Agenda date-window filter.
+- Calendar view applies only facet filters:
+  - category
+  - city
+  - neighborhood
+  - audience
+  - price
+- Agenda-only search and Today/This Weekend/Upcoming state are hidden and ignored while Calendar view is active.
 - Event detail pages are implemented at stable `/events/:slug--encodedId` paths.
 - Event detail pages include:
   - full plain-text event information
@@ -49,9 +73,14 @@ Last updated: 2026-07-13
 - The Worker serves event-detail app-shell responses with event-specific metadata when the event is present in the current feed.
 - Automated tests currently cover:
   - metadata parsing
+  - delimiter-free calendar metadata parsing
   - date range logic
   - event normalization
+  - recurrence-note expansion and API-range clipping
   - agenda section grouping
+  - overlapping agenda-window membership
+  - FullCalendar event mapping
+  - Calendar-specific filter behavior
   - public filters
   - event detail helper behavior
 
@@ -62,6 +91,7 @@ Last updated: 2026-07-13
   - React
   - Vite
   - Luxon
+  - FullCalendar
   - Cloudflare Workers with Static Assets
   - Vitest
 - Worker entry point:
@@ -74,6 +104,7 @@ Last updated: 2026-07-13
   - `GET /api/events`
   - implemented in `worker/routes/events.ts`
   - validates bounded date ranges
+  - defaults to a bounded long-range feed for the primary calendar
   - fetches Google Calendar Events list data server-side
   - requests expanded recurring instances
   - handles pagination
@@ -90,9 +121,11 @@ Last updated: 2026-07-13
 - Normalization path:
   - `worker/services/normalize-event.ts`
   - parses public descriptions and structured metadata
+  - parses the current delimiter-free key/value description format
   - validates known metadata fields
   - removes metadata from public descriptions
   - creates stable occurrence identifiers
+  - expands explicit weekly recurrence-note events returned by Google as long single events
   - computes all-day and multi-day flags
   - maps unknown taxonomy values to documented fallbacks
 - Date-range logic:
@@ -113,17 +146,20 @@ Last updated: 2026-07-13
 
 - Event detail pages can resolve only events included in the current default event feed. Old, expired, or out-of-range event URLs show the current "Event not found" state.
 - Event-detail app-shell metadata currently requires loading the current default event feed to resolve a detail URL. This is acceptable for the current implementation but should be revisited before production traffic, likely with caching or a more targeted lookup.
+- The default feed is broader now, but it is still intentionally bounded rather than an unlimited import of all historical and future Google Calendar data.
+- Recurrence-note expansion is intentionally conservative. It currently supports explicit weekly notes with a recognizable weekday and time range. Other prose recurrence patterns should be corrected in Google Calendar or given documented metadata before the site expands them.
+- City and neighborhood filters depend on explicit metadata or conservative known-place extraction from Google Calendar locations. They will improve as event metadata becomes more consistent.
+- Sandboxed local Codex runs can return `/api/events` 503 when the sandbox cannot reach Google. An escalated local Worker smoke test returned `/api/events` 200 with live data.
 - Production deployment, custom domain configuration, production secrets, and production cache policy have not been completed.
 - Final brand identity, final logo, and final category-specific artwork are not complete.
-- FullCalendar month/list calendar view has not been implemented.
 - Event submissions, organizer accounts, newsletter integration, analytics, sponsorship tooling, payments, and database-backed editorial tooling have not been implemented.
 - `docs/working-state.md` itself is currently a working-state reference and should be updated whenever a phase materially changes the implementation.
 
 ## Current task
 
-- Current active task: keep `docs/working-state.md` accurate as a concise implementation snapshot.
-- No new product feature slice is authorized by this document.
-- The next roadmap phase after the current implemented work is Phase 5: Full calendar view, but it still requires explicit task authorization before implementation.
+- Current active task: stabilize the primary calendar before beginning Phase 6 editorial enhancements.
+- Phase 5 full calendar work is implemented and currently being hardened against real Google Calendar data.
+- Phase 6 editorial enhancement items still require individual task authorization and acceptance criteria before implementation.
 
 ## Decisions already made
 
@@ -141,4 +177,6 @@ Last updated: 2026-07-13
 - The temporary wordmark is text-based: `Fresno Events` in a bold serif style.
 - The current palette is provisional and should remain easy to change.
 - Detail route stability depends on the normalized event occurrence ID, not the title slug.
+- The primary calendar should be completed and stable before Phase 6 editorial growth features are added.
+- `docs/working-state.md` should be updated as the final step of future implementation tasks.
 - Do not revisit these decisions unless new evidence creates a conflict.

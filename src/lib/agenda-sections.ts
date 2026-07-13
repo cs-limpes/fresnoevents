@@ -20,15 +20,15 @@ type SectionWindow = Omit<AgendaSection, 'events'>
 
 export function getAgendaSections(events: PublicEvent[], now: AnyDateTime = DateTime.now()): AgendaSection[] {
   const windows = getAgendaWindows(now)
-  const seen = new Set<string>()
 
   return windows.map((window) => {
+    const seenInSection = new Set<string>()
     const sectionEvents = events.filter((event) => {
-      if (seen.has(event.id) || !eventOverlapsRange(event, window.range.start, window.range.end)) {
+      if (seenInSection.has(event.id) || !eventOverlapsRange(event, window.range.start, window.range.end)) {
         return false
       }
 
-      seen.add(event.id)
+      seenInSection.add(event.id)
       return true
     })
 

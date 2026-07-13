@@ -9,9 +9,11 @@ import type { DateTime } from 'luxon'
 import type { EventAudience, EventCategory, EventPriceType, PublicEvent } from '../types/events'
 
 export type DateViewFilter = 'all' | AgendaSectionId
+export type DisplayMode = 'agenda' | 'calendar'
 
 export type FilterState = {
   query: string
+  display: DisplayMode
   view: DateViewFilter
   category: EventCategory | ''
   city: string
@@ -30,6 +32,7 @@ export type FilterOptions = {
 
 export const DEFAULT_FILTERS: FilterState = {
   query: '',
+  display: 'agenda',
   view: 'all',
   category: '',
   city: '',
@@ -89,6 +92,7 @@ const LABEL_OVERRIDES: Record<string, string> = {
 export function parseFilters(params: URLSearchParams): FilterState {
   return {
     query: cleanQuery(params.get('q')),
+    display: readDisplayMode(params.get('display')),
     view: readDateView(params.get('view')),
     category: readKnownValue(params.get('category'), EVENT_CATEGORIES),
     city: cleanFacet(params.get('city')),
@@ -103,6 +107,7 @@ export function serializeFilters(filters: FilterState): URLSearchParams {
   const query = cleanQuery(filters.query)
 
   if (query) params.set('q', query)
+  if (filters.display !== DEFAULT_FILTERS.display) params.set('display', filters.display)
   if (filters.view !== DEFAULT_FILTERS.view) params.set('view', filters.view)
   if (filters.category) params.set('category', filters.category)
   if (filters.city) params.set('city', filters.city)
@@ -115,8 +120,8 @@ export function serializeFilters(filters: FilterState): URLSearchParams {
 
 export function getActiveFilterCount(filters: FilterState): number {
   return [
-    cleanQuery(filters.query),
-    filters.view !== DEFAULT_FILTERS.view ? filters.view : '',
+    filters.display === 'agenda' ? cleanQuery(filters.query) : '',
+    filters.display === 'agenda' && filters.view !== DEFAULT_FILTERS.view ? filters.view : '',
     filters.category,
     filters.city,
     filters.neighborhood,
@@ -131,6 +136,10 @@ export function hasActiveFilters(filters: FilterState): boolean {
 
 export function filterEvents(events: PublicEvent[], filters: FilterState): PublicEvent[] {
   return events.filter((event) => eventMatchesFilters(event, filters))
+}
+
+export function filterCalendarEvents(events: PublicEvent[], filters: FilterState): PublicEvent[] {
+  return events.filter((event) => eventMatchesFacetFilters(event, filters))
 }
 
 export function getFilteredAgendaSections(
@@ -184,6 +193,10 @@ function eventMatchesFilters(event: PublicEvent, filters: FilterState): boolean 
     return false
   }
 
+  return eventMatchesFacetFilters(event, filters)
+}
+
+function eventMatchesFacetFilters(event: PublicEvent, filters: FilterState): boolean {
   if (filters.category && event.taxonomy.primaryCategory !== filters.category) {
     return false
   }
@@ -243,6 +256,10 @@ function cleanFacet(value: string | null): string {
 
 function readDateView(value: string | null): DateViewFilter {
   return DATE_VIEW_OPTIONS.some((option) => option.value === value) ? (value as DateViewFilter) : DEFAULT_FILTERS.view
+}
+
+function readDisplayMode(value: string | null): DisplayMode {
+  return value === 'calendar' ? 'calendar' : DEFAULT_FILTERS.display
 }
 
 function readKnownValue<T extends string>(value: string | null, allowed: T[]): T | '' {

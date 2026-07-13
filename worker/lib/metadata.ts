@@ -1,4 +1,5 @@
 const ALLOWED_KEYS = new Set([
+  'type',
   'category',
   'tags',
   'city',
@@ -22,7 +23,19 @@ const ALLOWED_KEYS = new Set([
   'website',
   'organizer',
   'organizer_url',
+  'recurrence_note',
   'accessibility',
+])
+
+const LEGACY_KEY_MAP = new Map<string, string>([
+  ['cost/tickets', 'price_text'],
+  ['cost', 'price_text'],
+  ['tickets', 'price_text'],
+  ['url/contact', 'website'],
+  ['url', 'website'],
+  ['contact', 'website'],
+  ['recurrence note', 'recurrence_note'],
+  ['reviewed ambiguity notes', 'reviewed_ambiguity_notes'],
 ])
 
 export type ParsedMetadata = {
@@ -39,8 +52,11 @@ export function parseEventDescription(description?: string): ParsedMetadata {
   const normalized = description.replace(/\r\n/g, '\n')
   const lines = normalized.split('\n')
   const delimiterIndex = lines.findIndex((line) => line.trim() === '---')
-  const publicLines = delimiterIndex === -1 ? lines : lines.slice(0, delimiterIndex)
-  const metadataLines = delimiterIndex === -1 ? [] : lines.slice(delimiterIndex + 1)
+  const legacyMetadata = delimiterIndex === -1 ? splitLegacyMetadata(lines) : undefined
+  const publicLines =
+    delimiterIndex === -1 ? (legacyMetadata?.publicLines ?? lines) : lines.slice(0, delimiterIndex)
+  const metadataLines =
+    delimiterIndex === -1 ? (legacyMetadata?.metadataLines ?? []) : lines.slice(delimiterIndex + 1)
   const warnings: string[] = []
   const fields: Record<string, string> = {}
 
@@ -57,7 +73,7 @@ export function parseEventDescription(description?: string): ParsedMetadata {
       continue
     }
 
-    const key = line.slice(0, separatorIndex).trim().toLowerCase()
+    const key = normalizeMetadataKey(line.slice(0, separatorIndex))
     const value = line.slice(separatorIndex + 1).trim()
 
     if (!ALLOWED_KEYS.has(key)) {
@@ -79,6 +95,33 @@ export function parseEventDescription(description?: string): ParsedMetadata {
     fields,
     warnings,
   }
+}
+
+function splitLegacyMetadata(lines: string[]): { publicLines: string[]; metadataLines: string[] } | undefined {
+  const firstMetadataIndex = lines.findIndex((line) => {
+    const separatorIndex = line.indexOf(':')
+
+    if (separatorIndex === -1) {
+      return false
+    }
+
+    return ALLOWED_KEYS.has(normalizeMetadataKey(line.slice(0, separatorIndex)))
+  })
+
+  if (firstMetadataIndex === -1) {
+    return undefined
+  }
+
+  return {
+    publicLines: lines.slice(0, firstMetadataIndex),
+    metadataLines: lines.slice(firstMetadataIndex),
+  }
+}
+
+function normalizeMetadataKey(value: string): string {
+  const normalized = value.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+  const mapped = LEGACY_KEY_MAP.get(normalized) ?? normalized
+  return mapped.replace(/\s+/g, '_')
 }
 
 export function parseBoolean(value?: string): boolean | undefined {
@@ -120,7 +163,8 @@ export function safeHttpsUrl(value?: string): string | undefined {
   }
 
   try {
-    const url = new URL(value)
+    const candidate = value.startsWith('www.') ? `https://${value}` : value
+    const url = new URL(candidate)
     return url.protocol === 'https:' ? url.toString() : undefined
   } catch {
     return undefined

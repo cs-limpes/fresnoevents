@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { DateTime } from 'luxon'
+import { EventCalendarView } from './components/event-calendar-view'
 import type { AgendaSection } from './lib/agenda-sections'
+import { uniqueEventsById } from './lib/calendar-events'
 import {
   buildGoogleCalendarUrl,
   buildIcsDataUrl,
@@ -17,6 +19,7 @@ import {
   buildFilterOptions,
   DATE_VIEW_OPTIONS,
   DEFAULT_FILTERS,
+  filterCalendarEvents,
   filterEvents,
   formatFilterLabel,
   getActiveFilterCount,
@@ -38,6 +41,12 @@ type LoadState =
   | { status: 'error'; message: string }
 
 type AppRoute = { kind: 'browse'; pathname: string } | { kind: 'event-detail'; pathname: string }
+type ActiveFilterKey = Exclude<keyof FilterState, 'display'>
+
+const DISPLAY_MODE_OPTIONS: Array<{ value: FilterState['display']; label: string }> = [
+  { value: 'agenda', label: 'Agenda' },
+  { value: 'calendar', label: 'Calendar' },
+]
 
 export function App() {
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -285,10 +294,17 @@ function AgendaSections({ data }: { data: EventsResponse }) {
   const [filters, setFilters] = useState<FilterState>(() => readFiltersFromUrl())
   const filterOptions = useMemo(() => buildFilterOptions(data.events), [data.events])
   const filteredEvents = useMemo(() => filterEvents(data.events, filters), [data.events, filters])
+  const filteredCalendarEvents = useMemo(() => filterCalendarEvents(data.events, filters), [data.events, filters])
   const sections = useMemo(() => getFilteredAgendaSections(filteredEvents, filters.view), [filteredEvents, filters.view])
   const unfilteredSections = useMemo(() => getFilteredAgendaSections(data.events, 'all'), [data.events])
-  const totalEvents = sections.reduce((count, section) => count + section.events.length, 0)
-  const unfilteredTotal = unfilteredSections.reduce((count, section) => count + section.events.length, 0)
+  const visibleEvents = useMemo(() => uniqueEventsById(sections.flatMap((section) => section.events)), [sections])
+  const calendarEvents = useMemo(() => uniqueEventsById(filteredCalendarEvents), [filteredCalendarEvents])
+  const unfilteredVisibleEvents = useMemo(
+    () => uniqueEventsById(unfilteredSections.flatMap((section) => section.events)),
+    [unfilteredSections],
+  )
+  const totalEvents = filters.display === 'calendar' ? calendarEvents.length : visibleEvents.length
+  const unfilteredTotal = filters.display === 'calendar' ? data.events.length : unfilteredVisibleEvents.length
   const activeFilterCount = getActiveFilterCount(filters)
 
   useEffect(() => {
@@ -314,7 +330,7 @@ function AgendaSections({ data }: { data: EventsResponse }) {
   }
 
   function clearFilters() {
-    updateFilters(DEFAULT_FILTERS, 'push')
+    updateFilters({ ...DEFAULT_FILTERS, display: filters.display }, 'push')
   }
 
   return (
@@ -341,12 +357,49 @@ function AgendaSections({ data }: { data: EventsResponse }) {
         totalCount={unfilteredTotal}
       />
 
+      <DisplayModeToggle display={filters.display} onChange={(display) => patchFilters({ display }, 'push')} />
+
       {totalEvents > 0 ? (
-        sections.map((section) => <AgendaSectionView key={section.id} section={section} />)
+        filters.display === 'calendar' ? (
+          <EventCalendarView events={calendarEvents} currentSearch={window.location.search} />
+        ) : (
+          sections.map((section) => <AgendaSectionView key={section.id} section={section} />)
+        )
       ) : (
         <FilterEmptyState filters={filters} onClear={clearFilters} />
       )}
     </section>
+  )
+}
+
+function DisplayModeToggle({
+  display,
+  onChange,
+}: {
+  display: FilterState['display']
+  onChange: (display: FilterState['display']) => void
+}) {
+  return (
+    <fieldset className="display-mode-toggle">
+      <legend>Browse view</legend>
+      <div className="segmented-control">
+        {DISPLAY_MODE_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className={`segmented-option${display === option.value ? ' segmented-option-active' : ''}`}
+          >
+            <input
+              type="radio"
+              name="display"
+              value={option.value}
+              checked={display === option.value}
+              onChange={() => onChange(option.value)}
+            />
+            <span>{option.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
   )
 }
 
@@ -377,38 +430,42 @@ function FilterPanel({
       </summary>
 
       <form className="filters-form" onSubmit={(event) => event.preventDefault()}>
-        <div className="search-field">
-          <label htmlFor="event-search">Search events</label>
-          <input
-            id="event-search"
-            name="q"
-            type="search"
-            value={filters.query}
-            onChange={(event) => onChange({ query: event.target.value }, 'replace')}
-            placeholder="Title, venue, city, category"
-          />
-        </div>
+        {filters.display === 'agenda' && (
+          <>
+            <div className="search-field">
+              <label htmlFor="event-search">Search events</label>
+              <input
+                id="event-search"
+                name="q"
+                type="search"
+                value={filters.query}
+                onChange={(event) => onChange({ query: event.target.value }, 'replace')}
+                placeholder="Title, venue, city, category"
+              />
+            </div>
 
-        <fieldset className="date-filter">
-          <legend>Date window</legend>
-          <div className="segmented-control">
-            {DATE_VIEW_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                className={`segmented-option${filters.view === option.value ? ' segmented-option-active' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="view"
-                  value={option.value}
-                  checked={filters.view === option.value}
-                  onChange={() => onChange({ view: option.value }, 'push')}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+            <fieldset className="date-filter">
+              <legend>Date window</legend>
+              <div className="segmented-control">
+                {DATE_VIEW_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className={`segmented-option${filters.view === option.value ? ' segmented-option-active' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="view"
+                      value={option.value}
+                      checked={filters.view === option.value}
+                      onChange={() => onChange({ view: option.value }, 'push')}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </>
+        )}
 
         <div className="facet-grid">
           <FilterSelect
@@ -498,7 +555,7 @@ function ActiveFilterChips({
   onRemove,
 }: {
   filters: FilterState
-  onRemove: (key: keyof FilterState) => void
+  onRemove: (key: ActiveFilterKey) => void
 }) {
   const chips = getActiveFilterChips(filters)
 
@@ -738,10 +795,12 @@ function writeFiltersToUrl(filters: FilterState, mode: 'push' | 'replace'): void
   window.history[mode === 'push' ? 'pushState' : 'replaceState']({}, '', url)
 }
 
-function getActiveFilterChips(filters: FilterState): Array<{ key: keyof FilterState; label: string }> {
-  return [
-    filters.query ? { key: 'query' as const, label: `Search: ${filters.query}` } : undefined,
-    filters.view !== 'all'
+function getActiveFilterChips(filters: FilterState): Array<{ key: ActiveFilterKey; label: string }> {
+  const chips: Array<{ key: ActiveFilterKey; label: string } | undefined> = [
+    filters.display === 'agenda' && filters.query
+      ? { key: 'query' as const, label: `Search: ${filters.query}` }
+      : undefined,
+    filters.display === 'agenda' && filters.view !== 'all'
       ? { key: 'view' as const, label: `Date: ${DATE_VIEW_OPTIONS.find((option) => option.value === filters.view)?.label}` }
       : undefined,
     filters.category ? { key: 'category' as const, label: `Category: ${formatFilterLabel(filters.category)}` } : undefined,
@@ -749,7 +808,9 @@ function getActiveFilterChips(filters: FilterState): Array<{ key: keyof FilterSt
     filters.neighborhood ? { key: 'neighborhood' as const, label: `Neighborhood: ${filters.neighborhood}` } : undefined,
     filters.audience ? { key: 'audience' as const, label: `Audience: ${formatFilterLabel(filters.audience)}` } : undefined,
     filters.price ? { key: 'price' as const, label: `Price: ${formatFilterLabel(filters.price)}` } : undefined,
-  ].filter((chip): chip is { key: keyof FilterState; label: string } => Boolean(chip))
+  ]
+
+  return chips.filter((chip): chip is { key: ActiveFilterKey; label: string } => Boolean(chip))
 }
 
 function useAppRoute(): AppRoute {

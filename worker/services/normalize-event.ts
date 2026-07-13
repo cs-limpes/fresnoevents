@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon'
 import type { EventAudience, EventCategory, EventPriceType, EventStatus, PublicEvent } from '../../src/types/events'
-import { CANONICAL_TIMEZONE } from '../lib/date-ranges'
+import { CANONICAL_TIMEZONE, type SerializedEventRange } from '../lib/date-ranges'
 import { parseBoolean, parseEventDescription, parseList, safeHttpsUrl } from '../lib/metadata'
 import type { GoogleCalendarEvent } from '../types/google-calendar'
 
@@ -21,6 +21,56 @@ const CATEGORY_VALUES = new Set<EventCategory>([
   'theater-film',
   'other',
 ])
+
+const CITY_VALUES = [
+  'Fresno',
+  'Clovis',
+  'Dinuba',
+  'Shaver Lake',
+  'Oakhurst',
+  'Cutler',
+  'Friant',
+  'Madera',
+  'Sanger',
+  'Selma',
+  'Visalia',
+]
+
+const NEIGHBORHOOD_VALUES = [
+  'Tower District',
+  'Old Town Clovis',
+  'Downtown Fresno',
+  'Harlan Ranch',
+  'Roeding Park',
+  'Woodward Park',
+]
+
+const WEEKDAY_VALUES: Record<string, number> = {
+  monday: 1,
+  mondays: 1,
+  mon: 1,
+  tuesday: 2,
+  tuesdays: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wednesdays: 3,
+  wed: 3,
+  thursday: 4,
+  thursdays: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fridays: 5,
+  fri: 5,
+  saturday: 6,
+  saturdays: 6,
+  sat: 6,
+  sunday: 7,
+  sundays: 7,
+  sun: 7,
+}
 
 export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent | null {
   const eventId = source.id ?? source.iCalUID
@@ -57,8 +107,8 @@ export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent |
     taxonomy: {
       primaryCategory: normalizeCategory(metadata.fields.category),
       tags: parseList(metadata.fields.tags),
-      audience: normalizeAudience(metadata.fields.audience),
-      priceType: normalizePrice(metadata.fields.price),
+      audience: normalizeAudience(metadata.fields.audience, metadata.publicDescription, metadata.fields.category),
+      priceType: normalizePrice(metadata.fields.price, metadata.fields.price_text),
     },
     pricing: buildPricing(metadata.fields),
     organizer: buildOrganizer(metadata.fields),
@@ -78,6 +128,37 @@ export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent |
     updatedAt: source.updated,
     createdAt: source.created,
   }
+}
+
+export function normalizeGoogleEventOccurrences(source: GoogleCalendarEvent, range?: SerializedEventRange): PublicEvent[] {
+  const event = normalizeGoogleEvent(source)
+
+  if (!event) {
+    return []
+  }
+
+  const metadata = parseEventDescription(source.description)
+  const recurrence = parseWeeklyRecurrence(metadata.fields.recurrence_note)
+
+  if (metadata.fields.type !== 'recurring_event' || !recurrence || source.recurringEventId) {
+    return [event]
+  }
+
+  const seriesStart = DateTime.fromISO(source.start?.dateTime ?? source.start?.date ?? '', { setZone: true }).setZone(
+    CANONICAL_TIMEZONE,
+  )
+  const seriesEnd = DateTime.fromISO(source.end?.dateTime ?? source.end?.date ?? '', { setZone: true }).setZone(
+    CANONICAL_TIMEZONE,
+  )
+
+  if (!seriesStart.isValid || !seriesEnd.isValid || seriesEnd <= seriesStart) {
+    return [event]
+  }
+
+  const rangeStart = range ? parseRangeBoundary(range.start) : undefined
+  const rangeEnd = range ? parseRangeBoundary(range.end) : undefined
+  const expanded = expandWeeklyEvent(event, recurrence, seriesStart, seriesEnd, rangeStart, rangeEnd)
+  return expanded.length > 0 ? expanded : [event]
 }
 
 export function comparePublicEvents(a: PublicEvent, b: PublicEvent): number {
@@ -109,10 +190,25 @@ function normalizeCategory(value?: string): EventCategory {
     return normalized as EventCategory
   }
 
+  const searchable = value?.toLowerCase() ?? ''
+
+  if (searchable.includes('farmer') || searchable.includes('market')) return 'markets'
+  if (searchable.includes('music') || searchable.includes('performance')) return 'music'
+  if (searchable.includes('movie') || searchable.includes('film') || searchable.includes('theater')) return 'theater-film'
+  if (searchable.includes('food') || searchable.includes('drink')) return 'food-drink'
+  if (searchable.includes('festival') || searchable.includes('firework') || searchable.includes('fiesta')) return 'festivals'
+  if (searchable.includes('craft') || searchable.includes('art')) return 'art'
+  if (searchable.includes('youth') || searchable.includes('teen') || searchable.includes('family')) return 'family'
+  if (searchable.includes('spiritual') || searchable.includes('pagan')) return 'spiritual'
+  if (searchable.includes('wellness') || searchable.includes('medicine')) return 'wellness'
+  if (searchable.includes('community') || searchable.includes('networking')) return 'community'
+  if (searchable.includes('sport') || searchable.includes('competition')) return 'sports'
+  if (searchable.includes('outdoor') || searchable.includes('astronomy') || searchable.includes('lake')) return 'outdoors'
+
   return 'other'
 }
 
-function normalizeAudience(value?: string): EventAudience[] {
+function normalizeAudience(value?: string, description?: string, category?: string): EventAudience[] {
   const values = parseList(value).map((item) => {
     const normalized = item.toLowerCase().trim()
 
@@ -126,10 +222,33 @@ function normalizeAudience(value?: string): EventAudience[] {
   })
 
   const unique = Array.from(new Set(values))
-  return unique.length > 0 ? unique : ['unknown']
+
+  if (unique.length > 0) {
+    return unique
+  }
+
+  const searchable = [description, category].filter(Boolean).join(' ').toLowerCase()
+
+  if (/\b(ages?\s*)?13\s*[-–]\s*18\b/.test(searchable) || /\bteens?\b|\byouth\b/.test(searchable)) {
+    return ['youth']
+  }
+
+  if (/\b21\s*\+/.test(searchable)) {
+    return ['21-plus']
+  }
+
+  if (/\b18\s*\+/.test(searchable)) {
+    return ['18-plus']
+  }
+
+  if (/\bfamily\b|\bkids?\b/.test(searchable)) {
+    return ['family-friendly']
+  }
+
+  return ['unknown']
 }
 
-function normalizePrice(value?: string): EventPriceType {
+function normalizePrice(value?: string, displayText?: string): EventPriceType {
   const normalized = value?.trim().toLowerCase().replace(/_/g, '-').replace(/\s+/g, '-')
 
   if (
@@ -141,6 +260,24 @@ function normalizePrice(value?: string): EventPriceType {
     return normalized
   }
 
+  const searchable = displayText?.toLowerCase() ?? ''
+
+  if (/\bfree\b/.test(searchable)) {
+    return 'free'
+  }
+
+  if (/\bdonation\b/.test(searchable)) {
+    return 'donation'
+  }
+
+  if (/\bregister|registration|required\b/.test(searchable)) {
+    return 'registration-required'
+  }
+
+  if (/\$\s*\d|\bpaid\b|\bticket\b|\bmonthly\b|\bdrop-in\b/.test(searchable)) {
+    return 'paid'
+  }
+
   return 'unknown'
 }
 
@@ -148,8 +285,8 @@ function buildVenue(source: GoogleCalendarEvent, fields: Record<string, string>)
   const online = parseBoolean(fields.online) ?? false
   const name = fields.venue || undefined
   const address = fields.address || source.location || undefined
-  const city = fields.city || undefined
-  const neighborhood = fields.neighborhood || undefined
+  const city = fields.city || inferKnownPlace(source.location, CITY_VALUES) || undefined
+  const neighborhood = fields.neighborhood || inferKnownPlace(source.location, NEIGHBORHOOD_VALUES) || undefined
 
   if (!name && !address && !city && !neighborhood && !online) {
     return undefined
@@ -203,6 +340,146 @@ function buildMedia(fields: Record<string, string>): PublicEvent['media'] {
     flyerUrl,
     categoryArtKey: normalizeCategory(fields.category),
   }
+}
+
+function inferKnownPlace(value: string | undefined, knownValues: string[]): string | undefined {
+  const normalized = value?.toLowerCase()
+
+  if (!normalized) {
+    return undefined
+  }
+
+  return knownValues.find((knownValue) => normalized.includes(knownValue.toLowerCase()))
+}
+
+type WeeklyRecurrence = {
+  weekday: number
+  startHour: number
+  startMinute: number
+  endHour: number
+  endMinute: number
+}
+
+function parseWeeklyRecurrence(note?: string): WeeklyRecurrence | undefined {
+  const normalized = note?.toLowerCase()
+
+  if (!normalized || !normalized.includes('weekly')) {
+    return undefined
+  }
+
+  const weekday = Object.entries(WEEKDAY_VALUES).find(([name]) => normalized.includes(name))?.[1]
+  const timeMatch = normalized.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–]\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i)
+
+  if (!weekday || !timeMatch) {
+    return undefined
+  }
+
+  const endMeridiem = timeMatch[6]
+  const startMeridiem = timeMatch[3] || endMeridiem
+  const start = toTwentyFourHour(Number(timeMatch[1]), Number(timeMatch[2] ?? 0), startMeridiem)
+  const end = toTwentyFourHour(Number(timeMatch[4]), Number(timeMatch[5] ?? 0), endMeridiem)
+
+  if (!start || !end) {
+    return undefined
+  }
+
+  return {
+    weekday,
+    startHour: start.hour,
+    startMinute: start.minute,
+    endHour: end.hour,
+    endMinute: end.minute,
+  }
+}
+
+function toTwentyFourHour(
+  hour: number,
+  minute: number,
+  meridiem: string,
+): { hour: number; minute: number } | undefined {
+  if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
+    return undefined
+  }
+
+  const normalizedHour = meridiem === 'am' ? hour % 12 : (hour % 12) + 12
+  return { hour: normalizedHour, minute }
+}
+
+function expandWeeklyEvent(
+  event: PublicEvent,
+  recurrence: WeeklyRecurrence,
+  seriesStart: DateTime<boolean>,
+  seriesEnd: DateTime<boolean>,
+  rangeStart?: DateTime<boolean>,
+  rangeEnd?: DateTime<boolean>,
+): PublicEvent[] {
+  const occurrences: PublicEvent[] = []
+  let cursor = seriesStart.startOf('day')
+
+  while (cursor.weekday !== recurrence.weekday) {
+    cursor = cursor.plus({ days: 1 })
+  }
+
+  while (cursor < seriesEnd) {
+    let occurrenceStart = cursor.set({
+      hour: recurrence.startHour,
+      minute: recurrence.startMinute,
+      second: 0,
+      millisecond: 0,
+    })
+
+    if (occurrenceStart < seriesStart) {
+      cursor = cursor.plus({ weeks: 1 })
+      continue
+    }
+
+    let occurrenceEnd = cursor.set({
+      hour: recurrence.endHour,
+      minute: recurrence.endMinute,
+      second: 0,
+      millisecond: 0,
+    })
+
+    if (occurrenceEnd <= occurrenceStart) {
+      occurrenceEnd = occurrenceEnd.plus({ days: 1 })
+    }
+
+    if (occurrenceStart >= seriesEnd) {
+      break
+    }
+
+    if ((!rangeStart || occurrenceEnd > rangeStart) && (!rangeEnd || occurrenceStart < rangeEnd)) {
+      const start = toIso(occurrenceStart)
+      const end = toIso(occurrenceEnd)
+
+      occurrences.push({
+        ...event,
+        id: `${event.source.eventId}-${start.replace(/[^a-zA-Z0-9]/g, '')}`,
+        source: {
+          ...event.source,
+          recurringEventId: event.source.eventId,
+          originalStartTime: start,
+        },
+        start,
+        end,
+        allDay: false,
+        multiDay: occurrenceStart.toISODate() !== occurrenceEnd.toISODate(),
+      })
+    }
+
+    cursor = cursor.plus({ weeks: 1 })
+  }
+
+  return occurrences
+}
+
+function toIso(value: DateTime<boolean>): string {
+  return value.setZone(CANONICAL_TIMEZONE).toISO({ suppressMilliseconds: true }) ?? value.toISO() ?? ''
+}
+
+function parseRangeBoundary(value: string): DateTime<boolean> | undefined {
+  const parsed = DateTime.fromISO(value, { setZone: true }).setZone(CANONICAL_TIMEZONE)
+  return parsed.isValid ? parsed : undefined
 }
 
 function makeExcerpt(description?: string): string | undefined {

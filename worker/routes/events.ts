@@ -1,7 +1,7 @@
 import type { ApiErrorResponse, EventsResponse, PublicEvent } from '../../src/types/events'
 import { validateRequestedRange } from '../lib/date-ranges'
 import { fetchGoogleCalendarEvents, GoogleCalendarError } from '../services/google-calendar'
-import { comparePublicEvents, normalizeGoogleEvent } from '../services/normalize-event'
+import { comparePublicEvents, normalizeGoogleEventOccurrences } from '../services/normalize-event'
 
 export type Env = {
   ASSETS: Fetcher
@@ -52,7 +52,7 @@ export async function loadEventsResponse(searchParams: URLSearchParams, env: Env
   try {
     const googleEvents = await fetchGoogleCalendarEvents({ calendarId, apiKey, timezone }, rangeResult.range)
     const events = googleEvents
-      .map(normalizeGoogleEvent)
+      .flatMap((event) => normalizeGoogleEventOccurrences(event, rangeResult.range))
       .filter(isDisplayableEvent)
       .sort(comparePublicEvents)
 
