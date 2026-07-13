@@ -72,6 +72,10 @@ Last updated: 2026-07-13
   - structured event data
   - client-side title, canonical, and Open Graph metadata updates
 - The Worker serves event-detail app-shell responses with event-specific metadata when the event is present in the current feed.
+- A unified corrections and event-lead contact flow is implemented at `/contact`, with `/submit` serving the same intake page.
+- The contact flow prepares a reader-reviewed email draft through `POST /api/contact-draft`.
+- The contact recipient is read server-side from `FRESNO_EVENTS_CONTACT_EMAIL`; the address is not rendered into the page or bundled client code.
+- Event leads sent through the contact flow are editorial leads only. They are not stored, moderated in-app, confirmed by email, or published automatically.
 - Automated tests currently cover:
   - metadata parsing
   - delimiter-free calendar metadata parsing
@@ -84,6 +88,7 @@ Last updated: 2026-07-13
   - Calendar-specific filter behavior
   - public filters
   - event detail helper behavior
+  - contact draft generation and controlled contact API errors
 
 ## Current architecture
 
@@ -142,6 +147,15 @@ Last updated: 2026-07-13
   - builds `.ics` content
   - builds map URLs
   - builds conservative structured event data
+- Contact flow:
+  - `src/types/contact.ts`
+  - defines contact draft request and response types shared by the browser and Worker
+  - `POST /api/contact-draft`
+  - implemented in `worker/routes/contact.ts`
+  - validates correction versus event-lead intent
+  - requires at least one event detail before preparing a draft
+  - builds a prefilled `mailto:` URL with the recipient from Worker environment only
+  - returns controlled JSON errors when the contact recipient is not configured
 
 ## Known issues
 
@@ -151,16 +165,19 @@ Last updated: 2026-07-13
 - Recurrence-note expansion is intentionally conservative. It currently supports explicit weekly notes with a recognizable weekday and time range. Other prose recurrence patterns should be corrected in Google Calendar or given documented metadata before the site expands them.
 - City and neighborhood filters depend on explicit metadata or conservative known-place extraction from Google Calendar locations. They will improve as event metadata becomes more consistent.
 - Sandboxed local Codex runs can return `/api/events` 503 when the sandbox cannot reach Google. An escalated local Worker smoke test returned `/api/events` 200 with live data.
+- Local contact draft smoke tests require `FRESNO_EVENTS_CONTACT_EMAIL` to be available to Wrangler. Automated tests cover the route with a test recipient, but the latest sandbox approval layer rejected restarting Wrangler with a temporary env file for a live contact endpoint smoke.
+- The contact flow is a mailto handoff. It keeps the recipient out of rendered HTML and bundled client code, but it is not a full server-side email relay and should not be treated as spam-proof or impossible to probe.
 - Production deployment, custom domain configuration, production secrets, and production cache policy have not been completed.
 - Final brand identity, final logo, and final category-specific artwork are not complete.
-- Event submissions, organizer accounts, newsletter integration, analytics, sponsorship tooling, payments, and database-backed editorial tooling have not been implemented.
+- Stored event submissions, organizer accounts, newsletter integration, analytics, sponsorship tooling, payments, confirmation emails, moderation queues, spam controls, and database-backed editorial tooling have not been implemented.
 - `docs/working-state.md` itself is currently a working-state reference and should be updated whenever a phase materially changes the implementation.
 
 ## Current task
 
-- Current active task: stabilize the primary calendar before beginning Phase 6 editorial enhancements.
-- Phase 5 full calendar work is implemented and currently being hardened against real Google Calendar data.
-- Phase 6 editorial enhancement items still require individual task authorization and acceptance criteria before implementation.
+- Current active task: Phase 6 corrections contact flow with a limited event-lead email handoff.
+- Phase 5 full calendar work is implemented and stable enough for Phase 6 editorial enhancement slices.
+- Future Phase 6 editorial enhancement items still require individual task authorization and acceptance criteria before implementation.
+- A fuller Phase 7 event submission system still requires an architecture decision for storage, moderation, spam controls, and confirmation emails.
 
 ## Decisions already made
 
@@ -179,5 +196,7 @@ Last updated: 2026-07-13
 - The current palette is provisional and should remain easy to change.
 - Detail route stability depends on the normalized event occurrence ID, not the title slug.
 - The primary calendar should be completed and stable before Phase 6 editorial growth features are added.
+- Corrections and early event leads may share a single contact intake when they remain email-based and do not store, moderate, confirm, or auto-publish submissions.
+- The Fresno Events contact recipient should be configured through `FRESNO_EVENTS_CONTACT_EMAIL`, not committed into client code.
 - `docs/working-state.md` should be updated as the final step of future implementation tasks.
 - Do not revisit these decisions unless new evidence creates a conflict.

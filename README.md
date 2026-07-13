@@ -18,7 +18,7 @@ Application development should not begin until the documentation review describe
 ## Local Phase 1 setup
 
 1. Copy `.dev.vars.example` to `.dev.vars`.
-2. Set `GOOGLE_CALENDAR_ID` and `GOOGLE_CALENDAR_API_KEY` in `.dev.vars`.
+2. Set `GOOGLE_CALENDAR_ID`, `GOOGLE_CALENDAR_API_KEY`, and `FRESNO_EVENTS_CONTACT_EMAIL` in `.dev.vars`.
 3. Keep `.dev.vars` local. It is intentionally ignored by git.
 
 Useful commands:

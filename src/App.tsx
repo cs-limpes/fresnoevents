@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import type { DateTime } from 'luxon'
 import { EventCalendarView } from './components/event-calendar-view'
 import type { AgendaSection } from './lib/agenda-sections'
@@ -31,6 +31,7 @@ import {
   type FilterState,
 } from './lib/event-filters'
 import { fetchEvents } from './lib/events-api'
+import type { ContactDraftRequest, ContactDraftResponse, ContactErrorResponse, ContactIntent } from './types/contact'
 import type { EventsResponse, PublicEvent } from './types/events'
 import './styles.css'
 
@@ -40,7 +41,10 @@ type LoadState =
   | { status: 'empty'; data: EventsResponse }
   | { status: 'error'; message: string }
 
-type AppRoute = { kind: 'browse'; pathname: string } | { kind: 'event-detail'; pathname: string }
+type AppRoute =
+  | { kind: 'browse'; pathname: string }
+  | { kind: 'event-detail'; pathname: string }
+  | { kind: 'contact'; pathname: string }
 type ActiveFilterKey = Exclude<keyof FilterState, 'display'>
 
 const DISPLAY_MODE_OPTIONS: Array<{ value: FilterState['display']; label: string }> = [
@@ -59,6 +63,10 @@ export function App() {
   usePageMetadata(route, detailEvent)
 
   useEffect(() => {
+    if (route.kind === 'contact') {
+      return
+    }
+
     let cancelled = false
 
     fetchEvents()
@@ -77,7 +85,10 @@ export function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [route.kind])
+
+  const pageHeading = getPageHeading(route, detailEvent)
+  const pageIntro = getPageIntro(route, detailEvent)
 
   return (
     <main className="app-shell">
@@ -88,39 +99,68 @@ export function App() {
           </a>
           <p className="eyebrow">Today, This Weekend, and Upcoming</p>
         </div>
-        <h1>{detailEvent ? detailEvent.title : 'Find what is happening around Fresno.'}</h1>
-        <p className="intro">
-          {detailEvent
-            ? formatEventDateTime(detailEvent)
-            : 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'}
-        </p>
+        <h1>{pageHeading}</h1>
+        <p className="intro">{pageIntro}</p>
       </header>
 
-      {state.status === 'loading' && <StatusMessage title="Loading events" body="Checking the calendar now." />}
+      {route.kind === 'contact' ? (
+        <ContactPage />
+      ) : (
+        <>
+          {state.status === 'loading' && <StatusMessage title="Loading events" body="Checking the calendar now." />}
 
-      {state.status === 'error' && (
-        <StatusMessage title="Events are unavailable" body={state.message} tone="error" />
+          {state.status === 'error' && (
+            <StatusMessage title="Events are unavailable" body={state.message} tone="error" />
+          )}
+
+          {state.status === 'empty' && (
+            <StatusMessage
+              title="No events found"
+              body={`No events were returned for ${formatRange(state.data.range.start, state.data.range.end)}.`}
+            />
+          )}
+
+          {state.status === 'loaded' &&
+            (route.kind === 'event-detail' ? (
+              <EventDetailPage data={state.data} pathname={route.pathname} />
+            ) : (
+              <AgendaSections data={state.data} />
+            ))}
+        </>
       )}
-
-      {state.status === 'empty' && (
-        <StatusMessage
-          title="No events found"
-          body={`No events were returned for ${formatRange(state.data.range.start, state.data.range.end)}.`}
-        />
-      )}
-
-      {state.status === 'loaded' &&
-        (route.kind === 'event-detail' ? (
-          <EventDetailPage data={state.data} pathname={route.pathname} />
-        ) : (
-          <AgendaSections data={state.data} />
-        ))}
 
       <footer className="site-footer">
+        <nav aria-label="Fresno Events links">
+          <a href="/contact">Send a correction or event lead</a>
+        </nav>
         <p>Fresno Events is in early development. Event facts come from the approved editorial calendar.</p>
       </footer>
     </main>
   )
+}
+
+function getPageHeading(route: AppRoute, detailEvent?: PublicEvent): string {
+  if (detailEvent) {
+    return detailEvent.title
+  }
+
+  if (route.kind === 'contact') {
+    return 'Send a correction or event lead.'
+  }
+
+  return 'Find what is happening around Fresno.'
+}
+
+function getPageIntro(route: AppRoute, detailEvent?: PublicEvent): string {
+  if (detailEvent) {
+    return formatEventDateTime(detailEvent)
+  }
+
+  if (route.kind === 'contact') {
+    return 'Help keep Fresno Events accurate with a correction, missing detail, or new event for editorial review.'
+  }
+
+  return 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'
 }
 
 function EventDetailPage({ data, pathname }: { data: EventsResponse; pathname: string }) {
@@ -288,6 +328,223 @@ function EventNotFound() {
       </a>
     </section>
   )
+}
+
+type ContactFormState = Required<ContactDraftRequest>
+
+type ContactStatus =
+  | { kind: 'idle' }
+  | { kind: 'loading' }
+  | { kind: 'ready'; mailtoUrl: string }
+  | { kind: 'error'; message: string }
+
+const DEFAULT_CONTACT_FORM: ContactFormState = {
+  intent: 'correction',
+  eventTitle: '',
+  eventUrl: '',
+  eventDate: '',
+  venue: '',
+  details: '',
+  senderName: '',
+  senderEmail: '',
+}
+
+const CONTACT_INTENT_OPTIONS: Array<{ value: ContactIntent; label: string; description: string }> = [
+  {
+    value: 'correction',
+    label: 'Correct an event',
+    description: 'Fix a date, time, location, link, price, or description.',
+  },
+  {
+    value: 'submission',
+    label: 'Send an event lead',
+    description: 'Share a new public event for editorial review.',
+  },
+]
+
+function ContactPage() {
+  const [form, setForm] = useState<ContactFormState>(DEFAULT_CONTACT_FORM)
+  const [status, setStatus] = useState<ContactStatus>({ kind: 'idle' })
+
+  function updateField<K extends keyof ContactFormState>(field: K, value: ContactFormState[K]) {
+    setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  async function openEmailDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setStatus({ kind: 'loading' })
+
+    try {
+      const response = await fetch('/api/contact-draft', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(form),
+      })
+
+      if (!response.ok) {
+        throw new Error(await readContactError(response))
+      }
+
+      const payload = (await response.json()) as ContactDraftResponse
+
+      if (!payload.mailtoUrl.startsWith('mailto:')) {
+        throw new Error('The email draft could not be prepared.')
+      }
+
+      setStatus({ kind: 'ready', mailtoUrl: payload.mailtoUrl })
+      window.location.href = payload.mailtoUrl
+    } catch (error) {
+      setStatus({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'The email draft could not be prepared.',
+      })
+    }
+  }
+
+  return (
+    <section className="contact-page" aria-labelledby="contact-heading">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Editorial inbox</p>
+          <h2 id="contact-heading">Corrections and event leads</h2>
+        </div>
+        <p>New events are reviewed before appearing on the public calendar.</p>
+      </div>
+
+      <form className="contact-form" onSubmit={openEmailDraft}>
+        <fieldset className="contact-intent-group">
+          <legend>What are you sending?</legend>
+          <div className="contact-intent-options">
+            {CONTACT_INTENT_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={`contact-intent-option${form.intent === option.value ? ' contact-intent-option-active' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="intent"
+                  value={option.value}
+                  checked={form.intent === option.value}
+                  onChange={() => updateField('intent', option.value)}
+                />
+                <span>{option.label}</span>
+                <small>{option.description}</small>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="contact-grid">
+          <label className="contact-field" htmlFor="contact-event-title">
+            <span>Event title</span>
+            <input
+              id="contact-event-title"
+              value={form.eventTitle}
+              onChange={(event) => updateField('eventTitle', event.target.value)}
+              maxLength={160}
+            />
+          </label>
+
+          <label className="contact-field" htmlFor="contact-event-url">
+            <span>Event page or source URL</span>
+            <input
+              id="contact-event-url"
+              type="url"
+              value={form.eventUrl}
+              onChange={(event) => updateField('eventUrl', event.target.value)}
+              maxLength={500}
+              placeholder="https://"
+            />
+          </label>
+
+          <label className="contact-field" htmlFor="contact-event-date">
+            <span>Date and time</span>
+            <input
+              id="contact-event-date"
+              value={form.eventDate}
+              onChange={(event) => updateField('eventDate', event.target.value)}
+              maxLength={120}
+            />
+          </label>
+
+          <label className="contact-field" htmlFor="contact-venue">
+            <span>Venue or location</span>
+            <input
+              id="contact-venue"
+              value={form.venue}
+              onChange={(event) => updateField('venue', event.target.value)}
+              maxLength={240}
+            />
+          </label>
+        </div>
+
+        <label className="contact-field" htmlFor="contact-details">
+          <span>Details</span>
+          <textarea
+            id="contact-details"
+            value={form.details}
+            onChange={(event) => updateField('details', event.target.value)}
+            maxLength={2000}
+            rows={7}
+            required
+          />
+        </label>
+
+        <div className="contact-grid">
+          <label className="contact-field" htmlFor="contact-name">
+            <span>Your name</span>
+            <input
+              id="contact-name"
+              value={form.senderName}
+              onChange={(event) => updateField('senderName', event.target.value)}
+              maxLength={120}
+            />
+          </label>
+
+          <label className="contact-field" htmlFor="contact-email">
+            <span>Reply email</span>
+            <input
+              id="contact-email"
+              type="email"
+              value={form.senderEmail}
+              onChange={(event) => updateField('senderEmail', event.target.value)}
+              maxLength={160}
+            />
+          </label>
+        </div>
+
+        <div className="contact-actions">
+          <button className="primary-action" type="submit" disabled={status.kind === 'loading'}>
+            {status.kind === 'loading' ? 'Preparing draft' : 'Open email draft'}
+          </button>
+          {status.kind === 'ready' && (
+            <a className="secondary-button detail-action-link" href={status.mailtoUrl}>
+              Open draft again
+            </a>
+          )}
+        </div>
+
+        <p className="contact-status" aria-live="polite">
+          {status.kind === 'ready'
+            ? 'Email draft prepared. Review it in your email app before sending.'
+            : status.kind === 'error'
+              ? status.message
+              : 'The public page does not display the editorial email address.'}
+        </p>
+      </form>
+    </section>
+  )
+}
+
+async function readContactError(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as ContactErrorResponse
+    return payload.error?.message || 'The email draft could not be prepared.'
+  } catch {
+    return 'The email draft could not be prepared.'
+  }
 }
 
 function AgendaSections({ data }: { data: EventsResponse }) {
@@ -830,6 +1087,11 @@ function useAppRoute(): AppRoute {
 
 function readAppRoute(): AppRoute {
   const pathname = window.location.pathname
+
+  if (pathname === '/contact' || pathname === '/submit') {
+    return { kind: 'contact', pathname }
+  }
+
   return pathname.startsWith('/events/') ? { kind: 'event-detail', pathname } : { kind: 'browse', pathname }
 }
 
@@ -839,10 +1101,14 @@ function usePageMetadata(route: AppRoute, event?: PublicEvent): void {
       ? `${event.title} | Fresno Events`
       : route.kind === 'event-detail'
         ? 'Event not found | Fresno Events'
-        : 'Fresno Events'
+        : route.kind === 'contact'
+          ? 'Send Event Updates | Fresno Events'
+          : 'Fresno Events'
     const description = event
       ? getEventSummary(event)
-      : 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'
+      : route.kind === 'contact'
+        ? 'Send Fresno Events a correction or a new event lead for editorial review.'
+        : 'A live local agenda for Fresno, Clovis, and nearby Central Valley communities.'
     const url = event ? getEventCanonicalUrl(event, window.location.origin) : `${window.location.origin}${route.pathname}`
 
     document.title = title

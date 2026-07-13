@@ -55,6 +55,7 @@ a:focus-visible {
 button,
 input,
 select,
+textarea,
 summary {
   font: inherit;
 }
@@ -68,6 +69,7 @@ summary {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
@@ -754,6 +756,11 @@ h1 {
   font-weight: 800;
 }
 
+.primary-action:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .share-status {
   margin-bottom: 0;
   color: var(--color-text-muted);
@@ -805,10 +812,134 @@ h1 {
   color: var(--color-text-muted);
 }
 
+.contact-page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.contact-form {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.65rem 1.6rem rgba(14, 61, 66, 0.08);
+}
+
+.contact-intent-group {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.contact-intent-group legend,
+.contact-field span {
+  margin-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.contact-intent-options {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.contact-intent-option {
+  position: relative;
+  display: grid;
+  gap: var(--space-1);
+  min-height: 4.5rem;
+  padding: var(--space-3);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  border: 1px solid #efd1ad;
+  border-radius: 0.5rem;
+}
+
+.contact-intent-option input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.contact-intent-option:focus-within {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.contact-intent-option span {
+  font-weight: 800;
+}
+
+.contact-intent-option small {
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.contact-intent-option-active {
+  border-color: var(--color-accent);
+  box-shadow: inset 0.35rem 0 0 var(--color-accent);
+}
+
+.contact-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.contact-field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.contact-field input,
+.contact-field textarea {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.contact-field textarea {
+  min-height: 10rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.contact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.contact-status {
+  margin-bottom: 0;
+  color: var(--color-text-muted);
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .site-footer {
+  display: grid;
+  gap: var(--space-3);
   padding-top: var(--space-5);
   color: var(--color-text-muted);
   border-top: 1px solid var(--color-border);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.site-footer a {
+  font-weight: 800;
 }
 
 .site-footer p {
@@ -848,6 +979,11 @@ h1 {
   .event-detail-grid {
     grid-template-columns: minmax(0, 1fr) 18rem;
     align-items: start;
+  }
+
+  .contact-intent-options,
+  .contact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

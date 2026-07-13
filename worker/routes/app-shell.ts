@@ -20,7 +20,9 @@ export async function handleAppShellRequest(request: Request, env: Env): Promise
     : undefined
   const metadata = event
     ? buildEventMetadata(event, url.origin)
-    : buildDefaultMetadata(url)
+    : isContactPath(url.pathname)
+      ? buildContactMetadata(url)
+      : buildDefaultMetadata(url)
 
   return new Response(injectMetadata(html, metadata), {
     status: indexResponse.status,
@@ -61,6 +63,19 @@ function buildDefaultMetadata(url: URL): PageMetadata {
     url: `${url.origin}${url.pathname}`,
     type: 'website',
   }
+}
+
+function buildContactMetadata(url: URL): PageMetadata {
+  return {
+    title: 'Send Event Updates | Fresno Events',
+    description: 'Send Fresno Events a correction or a new event lead for editorial review.',
+    url: `${url.origin}${url.pathname}`,
+    type: 'website',
+  }
+}
+
+function isContactPath(pathname: string): boolean {
+  return pathname === '/contact' || pathname === '/submit'
 }
 
 function injectMetadata(html: string, metadata: PageMetadata): string {
