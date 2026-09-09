@@ -22,12 +22,13 @@ describe('event filters', () => {
         id: 'music',
         title: 'Jazz Night',
         venue: { name: 'Tower Theatre', city: 'Fresno', neighborhood: 'Tower District', online: false },
-        taxonomy: { primaryCategory: 'music', tags: ['live music'], audience: ['21-plus'], priceType: 'paid' },
+        taxonomy: { primaryCategory: 'music', categories: ['music', 'nightlife'], tags: ['live music'], audience: ['21-plus'], priceType: 'paid' },
       }),
       event({ id: 'market', title: 'Saturday Market' }),
     ]
 
     expect(filterEvents(events, { ...DEFAULT_FILTERS, query: 'tower jazz' }).map((item) => item.id)).toEqual(['music'])
+    expect(filterEvents(events, { ...DEFAULT_FILTERS, query: 'nightlife' }).map((item) => item.id)).toEqual(['music'])
   })
 
   it('combines category, city, audience, and price filters', () => {
@@ -35,24 +36,30 @@ describe('event filters', () => {
       event({
         id: 'match',
         venue: { city: 'Fresno', online: false },
-        taxonomy: { primaryCategory: 'family', tags: [], audience: ['family-friendly'], priceType: 'free' },
+        taxonomy: { primaryCategory: 'family', categories: ['family', 'festivals'], tags: [], audience: ['family-friendly'], priceType: 'free' },
       }),
       event({
         id: 'wrong-price',
         venue: { city: 'Fresno', online: false },
-        taxonomy: { primaryCategory: 'family', tags: [], audience: ['family-friendly'], priceType: 'paid' },
+        taxonomy: { primaryCategory: 'family', categories: ['family'], tags: [], audience: ['family-friendly'], priceType: 'paid' },
       }),
     ]
 
     const filters: FilterState = {
       ...DEFAULT_FILTERS,
-      category: 'family',
+      category: 'festivals',
       city: 'Fresno',
       audience: 'family-friendly',
       price: 'free',
     }
 
     expect(filterEvents(events, filters).map((item) => item.id)).toEqual(['match'])
+  })
+
+  it('keeps legacy primary-category-only events filterable', () => {
+    const events = [event({ id: 'legacy', taxonomy: { primaryCategory: 'music', tags: [], audience: ['all-ages'], priceType: 'free' } })]
+
+    expect(filterEvents(events, { ...DEFAULT_FILTERS, category: 'music' }).map((item) => item.id)).toEqual(['legacy'])
   })
 
   it('serializes and parses URL query state', () => {
@@ -100,7 +107,7 @@ describe('event filters', () => {
         start: '2026-09-01T12:00:00-07:00',
         end: '2026-09-01T13:00:00-07:00',
         venue: { city: 'Fresno', online: false },
-        taxonomy: { primaryCategory: 'markets', tags: [], audience: ['all-ages'], priceType: 'free' },
+        taxonomy: { primaryCategory: 'markets', categories: ['markets', 'outdoors'], tags: [], audience: ['all-ages'], priceType: 'free' },
       }),
       event({
         id: 'wrong-city',
@@ -108,7 +115,7 @@ describe('event filters', () => {
         start: '2026-07-11T12:00:00-07:00',
         end: '2026-07-11T13:00:00-07:00',
         venue: { city: 'Clovis', online: false },
-        taxonomy: { primaryCategory: 'markets', tags: [], audience: ['all-ages'], priceType: 'free' },
+        taxonomy: { primaryCategory: 'markets', categories: ['markets'], tags: [], audience: ['all-ages'], priceType: 'free' },
       }),
     ]
 
@@ -117,7 +124,7 @@ describe('event filters', () => {
       display: 'calendar',
       query: 'tower music',
       view: 'today',
-      category: 'markets',
+      category: 'outdoors',
       city: 'Fresno',
     }
 
@@ -125,16 +132,16 @@ describe('event filters', () => {
     expect(getActiveFilterCount(filters)).toBe(2)
   })
 
-  it('builds filter options from available event data only', () => {
+  it('builds filter options from every available event category', () => {
     const options = buildFilterOptions([
       event({
         venue: { city: 'Clovis', neighborhood: 'Old Town', online: false },
-        taxonomy: { primaryCategory: 'markets', tags: [], audience: ['all-ages'], priceType: 'free' },
+        taxonomy: { primaryCategory: 'markets', categories: ['markets', 'food-drink', 'community'], tags: [], audience: ['all-ages'], priceType: 'free' },
       }),
     ])
 
     expect(options).toMatchObject({
-      categories: ['markets'],
+      categories: ['community', 'food-drink', 'markets'],
       cities: ['Clovis'],
       neighborhoods: ['Old Town'],
       audiences: ['all-ages'],
@@ -180,6 +187,7 @@ function event(overrides: Partial<PublicEvent> = {}): PublicEvent {
     status: 'confirmed',
     taxonomy: {
       primaryCategory: 'other',
+      categories: ['other'],
       tags: [],
       audience: ['unknown'],
       priceType: 'unknown',

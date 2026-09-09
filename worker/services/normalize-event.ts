@@ -84,6 +84,7 @@ export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent |
   const metadata = parseEventDescription(source.description)
   const allDay = Boolean(source.start?.date)
   const status = normalizeStatus(source.status)
+  const categories = normalizeCategories(metadata.fields.category)
 
   return {
     id: buildPublicEventId(eventId, source),
@@ -105,14 +106,15 @@ export function normalizeGoogleEvent(source: GoogleCalendarEvent): PublicEvent |
     status,
     venue: buildVenue(source, metadata.fields),
     taxonomy: {
-      primaryCategory: normalizeCategory(metadata.fields.category),
+      primaryCategory: categories[0],
+      categories,
       tags: parseList(metadata.fields.tags),
       audience: normalizeAudience(metadata.fields.audience, metadata.publicDescription, metadata.fields.category),
       priceType: normalizePrice(metadata.fields.price, metadata.fields.price_text),
     },
     pricing: buildPricing(metadata.fields),
     organizer: buildOrganizer(metadata.fields),
-    media: buildMedia(metadata.fields),
+    media: buildMedia(metadata.fields, categories[0]),
     links: {
       sourceUrl: safeHttpsUrl(metadata.fields.source),
       registrationUrl: safeHttpsUrl(metadata.fields.registration),
@@ -183,11 +185,28 @@ function normalizeStatus(status?: string): EventStatus {
   return 'confirmed'
 }
 
-function normalizeCategory(value?: string): EventCategory {
+function normalizeCategories(value?: string): EventCategory[] {
+  const explicit = parseList(value)
+    .map((item) => normalizeCategory(item, false))
+    .filter((category): category is EventCategory => Boolean(category))
+  const uniqueExplicit = Array.from(new Set(explicit))
+
+  if (uniqueExplicit.length > 0) {
+    return uniqueExplicit
+  }
+
+  return [normalizeCategory(value, true) ?? 'other']
+}
+
+function normalizeCategory(value?: string, allowHeuristics = true): EventCategory | undefined {
   const normalized = value?.trim().toLowerCase().replace(/&/g, '').replace(/\s+/g, '-')
 
   if (normalized && CATEGORY_VALUES.has(normalized as EventCategory)) {
     return normalized as EventCategory
+  }
+
+  if (!allowHeuristics) {
+    return undefined
   }
 
   const searchable = value?.toLowerCase() ?? ''
@@ -330,7 +349,7 @@ function buildOrganizer(fields: Record<string, string>): PublicEvent['organizer'
   }
 }
 
-function buildMedia(fields: Record<string, string>): PublicEvent['media'] {
+function buildMedia(fields: Record<string, string>, primaryCategory: EventCategory): PublicEvent['media'] {
   const imageUrl = safeHttpsUrl(fields.image)
   const flyerUrl = safeHttpsUrl(fields.flyer)
 
@@ -338,7 +357,7 @@ function buildMedia(fields: Record<string, string>): PublicEvent['media'] {
     imageUrl,
     imageAlt: fields.image_alt || undefined,
     flyerUrl,
-    categoryArtKey: normalizeCategory(fields.category),
+    categoryArtKey: primaryCategory,
   }
 }
 

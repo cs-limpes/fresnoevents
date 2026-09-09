@@ -66,6 +66,7 @@ export type PublicEvent = {
 
   taxonomy: {
     primaryCategory: EventCategory
+    categories?: EventCategory[]
     tags: string[]
     audience: EventAudience[]
     priceType: EventPriceType
