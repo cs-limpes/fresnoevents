@@ -30,12 +30,52 @@ source: https://example.com/event`,
     expect(event?.source).not.toHaveProperty('calendarId')
     expect(event?.description).toBe('Public description.')
     expect(event?.taxonomy.primaryCategory).toBe('art')
+    expect(event?.taxonomy.categories).toEqual(['art'])
     expect(event?.taxonomy.audience).toEqual(['21-plus'])
     expect(event?.taxonomy.priceType).toBe('paid')
     expect(event?.editorial.featured).toBe(true)
     expect(event?.links.sourceUrl).toBe('https://example.com/event')
     expect(event?.source.htmlLink).toBe('https://calendar.google.com/event?eid=abc123')
     expect(event?.multiDay).toBe(true)
+  })
+
+  it('normalizes comma-separated categories while retaining the first as primary', () => {
+    const source: GoogleCalendarEvent = {
+      id: 'multi-category',
+      summary: 'Neighborhood Night Market',
+      description: `Food vendors, live music, and local makers.
+
+---
+category: markets, food-drink, music, community
+price: free`,
+      start: { dateTime: '2026-07-11T18:00:00-07:00' },
+      end: { dateTime: '2026-07-11T22:00:00-07:00' },
+      status: 'confirmed',
+    }
+
+    const event = normalizeGoogleEvent(source)
+
+    expect(event?.taxonomy.primaryCategory).toBe('markets')
+    expect(event?.taxonomy.categories).toEqual(['markets', 'food-drink', 'music', 'community'])
+    expect(event?.media?.categoryArtKey).toBe('markets')
+  })
+
+  it('keeps legacy descriptive category heuristics working', () => {
+    const source: GoogleCalendarEvent = {
+      id: 'legacy-category',
+      summary: 'Teen Circle',
+      description: `A weekly group.
+
+Category: Youth Teen Program`,
+      start: { dateTime: '2026-07-11T18:00:00-07:00' },
+      end: { dateTime: '2026-07-11T19:00:00-07:00' },
+      status: 'confirmed',
+    }
+
+    const event = normalizeGoogleEvent(source)
+
+    expect(event?.taxonomy.primaryCategory).toBe('family')
+    expect(event?.taxonomy.categories).toEqual(['family'])
   })
 
   it('does not expose the Google Calendar htmlLink as a public source link', () => {
@@ -109,6 +149,7 @@ Recurrence note: Wednesdays weekly, 4:30-6:00 PM`,
       venue: { city: 'Fresno' },
       taxonomy: {
         primaryCategory: 'family',
+        categories: ['family'],
         audience: ['youth'],
         priceType: 'paid',
       },
