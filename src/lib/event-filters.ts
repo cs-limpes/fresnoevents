@@ -167,7 +167,7 @@ export function getFilteredAgendaSections(
 
 export function buildFilterOptions(events: PublicEvent[]): FilterOptions {
   return {
-    categories: sortByLabel(unique(events.map((event) => event.taxonomy.primaryCategory))),
+    categories: sortByLabel(unique(events.flatMap((event) => event.taxonomy.categories))),
     cities: sortText(unique(events.map((event) => event.venue?.city))),
     neighborhoods: sortText(unique(events.map((event) => event.venue?.neighborhood))),
     audiences: sortByLabel(unique(events.flatMap((event) => event.taxonomy.audience))),
@@ -197,7 +197,7 @@ function eventMatchesFilters(event: PublicEvent, filters: FilterState): boolean 
 }
 
 function eventMatchesFacetFilters(event: PublicEvent, filters: FilterState): boolean {
-  if (filters.category && event.taxonomy.primaryCategory !== filters.category) {
+  if (filters.category && !event.taxonomy.categories.includes(filters.category)) {
     return false
   }
 
@@ -231,7 +231,7 @@ function matchesQuery(event: PublicEvent, query: string): boolean {
       event.venue?.address,
       event.venue?.city,
       event.venue?.neighborhood,
-      event.taxonomy.primaryCategory,
+      ...event.taxonomy.categories,
       ...event.taxonomy.tags,
       event.organizer?.name,
     ]
