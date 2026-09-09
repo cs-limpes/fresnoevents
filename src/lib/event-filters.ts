@@ -42,10 +42,10 @@ export const DEFAULT_FILTERS: FilterState = {
 }
 
 export const DATE_VIEW_OPTIONS: Array<{ value: DateViewFilter; label: string }> = [
-  { value: 'all', label: 'All dates' },
+  { value: 'all', label: 'No Date Filter' },
   { value: 'today', label: 'Today' },
   { value: 'this-weekend', label: 'This Weekend' },
-  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'upcoming', label: 'This Month' },
 ]
 
 const EVENT_CATEGORIES: EventCategory[] = [
